@@ -1,6 +1,5 @@
 local EmojiPreloader = {}
 
--- Объявляем эмодзи как переменные (убрали KEY)
 EmojiPreloader.TREE = "🌲"
 EmojiPreloader.CHECK = "✅"
 EmojiPreloader.CROSS = "❌"
@@ -8,17 +7,13 @@ EmojiPreloader.ROCKET = "🚀"
 EmojiPreloader.STOP = "⏹️"
 EmojiPreloader.RUSSIA = "🇷🇺"
 EmojiPreloader.USA = "🇺🇸"
-EmojiPreloader.DISCORD = "📱" -- Добавили дискорд иконку
+EmojiPreloader.DISCORD = "📱"
 
--- Функция предзагрузки эмодзи
 function EmojiPreloader.preloadEmojis()
     local Players = game:GetService("Players")
     local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
-    
-    print(EmojiPreloader.TREE .. " Начинаю предзагрузку эмодзи...")
-    
-    -- Создаем невидимый ScreenGui для предзагрузки
+
     local preloadGui = Instance.new("ScreenGui")
     preloadGui.Name = "EmojiPreloader"
     preloadGui.ResetOnSpawn = false
@@ -26,7 +21,6 @@ function EmojiPreloader.preloadEmojis()
     preloadGui.Enabled = false
     preloadGui.Parent = playerGui
     
-    -- Предзагружаем все эмодзи
     local emojis = {
         EmojiPreloader.TREE,
         EmojiPreloader.CHECK,
@@ -50,11 +44,9 @@ function EmojiPreloader.preloadEmojis()
         label.Parent = preloadGui
     end
     
-    -- Удаляем GUI после загрузки
     task.delay(0.5, function()
         if preloadGui and preloadGui.Parent then
             preloadGui:Destroy()
-            print(EmojiPreloader.CHECK .. " Все эмодзи успешно предзагружены!")
         end
     end)
     
