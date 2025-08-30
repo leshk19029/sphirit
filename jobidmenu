@@ -1,0 +1,226 @@
+-- Draggable Server Connection Menu
+-- Made for Roblox
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ServerConnector"
+screenGui.Parent = playerGui
+screenGui.ResetOnSpawn = false
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 200)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+-- Corner
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Name = "TitleText"
+titleText.Size = UDim2.new(1, -40, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Server Connector"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 16
+titleText.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 30, 1, 0)
+closeButton.Position = UDim2.new(1, -30, 0, 0)
+closeButton.BackgroundTransparency = 1
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 16
+closeButton.Parent = titleBar
+
+-- Content
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Size = UDim2.new(1, -20, 1, -50)
+contentFrame.Position = UDim2.new(0, 10, 0, 40)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- Job ID Input
+local jobIdLabel = Instance.new("TextLabel")
+jobIdLabel.Name = "JobIdLabel"
+jobIdLabel.Size = UDim2.new(1, 0, 0, 20)
+jobIdLabel.Position = UDim2.new(0, 0, 0, 0)
+jobIdLabel.BackgroundTransparency = 1
+jobIdLabel.Text = "Job ID:"
+jobIdLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+jobIdLabel.TextXAlignment = Enum.TextXAlignment.Left
+jobIdLabel.Font = Enum.Font.SourceSans
+jobIdLabel.TextSize = 14
+jobIdLabel.Parent = contentFrame
+
+local jobIdInput = Instance.new("TextBox")
+jobIdInput.Name = "JobIdInput"
+jobIdInput.Size = UDim2.new(1, 0, 0, 30)
+jobIdInput.Position = UDim2.new(0, 0, 0, 25)
+jobIdInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+jobIdInput.BorderSizePixel = 0
+jobIdInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+jobIdInput.Font = Enum.Font.SourceSans
+jobIdInput.TextSize = 14
+jobIdInput.PlaceholderText = "Enter Job ID here..."
+jobIdInput.PlaceholderColor3 = Color3.fromRGB(180, 180, 180)
+jobIdInput.Text = ""
+jobIdInput.Parent = contentFrame
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0, 4)
+inputCorner.Parent = jobIdInput
+
+-- Connect Button
+local connectButton = Instance.new("TextButton")
+connectButton.Name = "ConnectButton"
+connectButton.Size = UDim2.new(1, 0, 0, 35)
+connectButton.Position = UDim2.new(0, 0, 0, 70)
+connectButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+connectButton.BorderSizePixel = 0
+connectButton.Text = "Connect to Server"
+connectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+connectButton.Font = Enum.Font.SourceSansBold
+connectButton.TextSize = 14
+connectButton.Parent = contentFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 4)
+buttonCorner.Parent = connectButton
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(1, 0, 0, 20)
+statusLabel.Position = UDim2.new(0, 0, 0, 115)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Ready"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.TextSize = 12
+statusLabel.Parent = contentFrame
+
+-- Dragging functionality
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function update(input)
+	local delta = input.Position - dragStart
+	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+-- Close button functionality
+closeButton.MouseButton1Click:Connect(function()
+	screenGui:Destroy()
+end)
+
+-- Connect button functionality
+connectButton.MouseButton1Click:Connect(function()
+	local jobId = jobIdInput.Text:gsub("%s+", "") -- Remove whitespace
+	
+	if jobId == "" then
+		statusLabel.Text = "Please enter a Job ID"
+		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+		return
+	end
+	
+	statusLabel.Text = "Connecting..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+	
+	-- Try to connect to the server
+	local success, errorMessage = pcall(function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, player)
+	end)
+	
+	if not success then
+		statusLabel.Text = "Error: " .. errorMessage
+		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+		
+		-- Reset after 3 seconds
+		wait(3)
+		statusLabel.Text = "Ready"
+		statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	end
+end)
+
+-- Hover effects
+connectButton.MouseEnter:Connect(function()
+	connectButton.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+end)
+
+connectButton.MouseLeave:Connect(function()
+	connectButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+end)
+
+closeButton.MouseEnter:Connect(function()
+	closeButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+end)
+
+closeButton.MouseLeave:Connect(function()
+	closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+-- Make the menu visible
+screenGui.Enabled = true
