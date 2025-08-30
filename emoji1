@@ -1,0 +1,69 @@
+local EmojiPreloader = {}
+
+-- Объявляем эмодзи как переменные (убрали KEY)
+EmojiPreloader.TREE = "🌲"
+EmojiPreloader.CHECK = "✅"
+EmojiPreloader.CROSS = "❌"
+EmojiPreloader.ROCKET = "🚀"
+EmojiPreloader.STOP = "⏹️"
+EmojiPreloader.RUSSIA = "🇷🇺"
+EmojiPreloader.USA = "🇺🇸"
+EmojiPreloader.DISCORD = "📱" -- Добавили дискорд иконку
+
+-- Функция предзагрузки эмодзи
+function EmojiPreloader.preloadEmojis()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+    
+    print(EmojiPreloader.TREE .. " Начинаю предзагрузку эмодзи...")
+    
+    -- Создаем невидимый ScreenGui для предзагрузки
+    local preloadGui = Instance.new("ScreenGui")
+    preloadGui.Name = "EmojiPreloader"
+    preloadGui.ResetOnSpawn = false
+    preloadGui.DisplayOrder = 9999
+    preloadGui.Enabled = false
+    preloadGui.Parent = playerGui
+    
+    -- Предзагружаем все эмодзи
+    local emojis = {
+        EmojiPreloader.TREE,
+        EmojiPreloader.CHECK,
+        EmojiPreloader.CROSS,
+        EmojiPreloader.ROCKET,
+        EmojiPreloader.STOP,
+        EmojiPreloader.RUSSIA,
+        EmojiPreloader.USA,
+        EmojiPreloader.DISCORD
+    }
+    
+    for _, emoji in ipairs(emojis) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0, 1, 0, 1)
+        label.Position = UDim2.new(0, -100, 0, -100)
+        label.BackgroundTransparency = 1
+        label.Text = emoji
+        label.TextSize = 20
+        label.Font = Enum.Font.GothamBold
+        label.Visible = false
+        label.Parent = preloadGui
+    end
+    
+    -- Удаляем GUI после загрузки
+    task.delay(0.5, function()
+        if preloadGui and preloadGui.Parent then
+            preloadGui:Destroy()
+            print(EmojiPreloader.CHECK .. " Все эмодзи успешно предзагружены!")
+        end
+    end)
+    
+    return true
+end
+
+-- Автоматическая предзагрузка
+task.spawn(function()
+    EmojiPreloader.preloadEmojis()
+end)
+
+return EmojiPreloader
