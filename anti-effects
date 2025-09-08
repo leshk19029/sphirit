@@ -13,15 +13,15 @@ return function()
                 blur:Destroy()
             end
 
-            -- Включаем ColorCorrection (создаём, если нет)
-            local correction = lighting:FindFirstChild("ColorCCorrection") or Instance.new("ColorCCorrection")
+            -- Включаем ColorCorrection (создаём, если нет) - исправлено название
+            local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
             correction.Parent = lighting
             correction.Enabled = true
 
-            -- === Фиксируем FieldOfView = 70 только при обнаружении DiscoEffect ===
+            -- Фиксируем FieldOfView = 70 только при обнаружении DiscoEffect
             camera.FieldOfView = 70 -- Устанавливаем сразу
             
-            -- Настраиваем отслеживание изменений FOV (если вдруг кто-то попытается поменять)
+            -- Настраиваем отслеживание изменений FOV
             if not camera:GetPropertyChangedSignal("FieldOfView"):IsConnected() then
                 camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
                     if camera.FieldOfView ~= 70 then
@@ -32,7 +32,7 @@ return function()
         end
     end
 
-    -- Проверяем существующие объекты (на случай, если DiscoEffect уже есть)
+    -- Проверяем существующие объекты
     for _, child in ipairs(lighting:GetChildren()) do
         checkForDiscoEffect(child)
     end
@@ -41,25 +41,35 @@ return function()
     lighting.ChildAdded:Connect(checkForDiscoEffect)
 
     local Players = game:GetService("Players")
-    local Lighting = game:GetService("Lighting")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local RunService = game:GetService("RunService")
 
     local localPlayer = Players.LocalPlayer
-    local playerScripts = localPlayer.PlayerScripts
+    local playerScripts = localPlayer:WaitForChild("PlayerScripts")
     local camera = workspace.CurrentCamera
 
-    -- Получаем оригинальные модули управления
-    local PlayerModule = require(playerScripts:WaitForChild("PlayerModule"))
-    local controls = PlayerModule:GetControls()
-    local CharacterController = require(ReplicatedStorage.Controllers.CharacterController)
-    local originalMoveFunction = CharacterController.originalMoveFunction
+    -- Безопасное получение модулей управления
+    local PlayerModule, controls, originalMoveFunction
+    
+    local function safeRequire(instance)
+        local success, result = pcall(function()
+            return require(instance)
+        end)
+        return success and result or nil
+    end
 
-    -- Функция для восстановления управления и удаления эффектов
+    -- Пытаемся получить модули с защитой от ошибок
+    PlayerModule = safeRequire(playerScripts:WaitForChild("PlayerModule"))
+    if PlayerModule then
+        controls = PlayerModule:GetControls()
+    end
+
+    -- Функция для восстановления управления
     local function restoreControls()
-        -- Восстанавливаем оригинальную функцию движения
-        if controls and originalMoveFunction then
-            controls.moveFunction = originalMoveFunction
+        if controls then
+            pcall(function()
+                controls:Enable()
+            end)
         end
         
         -- Восстанавливаем FieldOfView камеры
@@ -72,7 +82,7 @@ return function()
     local function checkEffects()
         -- Удаляем эффекты, если они есть
         for _, effectName in ipairs({"BeeBlur", "ColorCorrection"}) do
-            local effect = Lighting:FindFirstChild(effectName)
+            local effect = lighting:FindFirstChild(effectName)
             if effect then
                 effect:Destroy()
             end
@@ -80,28 +90,28 @@ return function()
     end
 
     -- Слушатель для новых эффектов в Lighting
-    Lighting.ChildAdded:Connect(function(child)
+    lighting.ChildAdded:Connect(function(child)
         if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
             child:Destroy()
-            restoreControls() -- Дополнительно восстанавливаем управление
+            restoreControls()
         end
     end)
 
-    -- Постоянная проверка (на случай, если ChildAdded не сработает)
+    -- Постоянная проверка
     local connection
     connection = RunService.Heartbeat:Connect(function()
         checkEffects()
-        restoreControls() -- Постоянно восстанавливаем управление
+        restoreControls()
     end)
 
-    -- Остановка скрипта при выходе (опционально)
-    localPlayer.CharacterRemoving:Connect(function()
+    -- Очистка при выходе
+    local function cleanup()
         if connection then
             connection:Disconnect()
         end
-    end)
+        restoreControls()
+    end
 
-    -- Первоначальная проверка
-    checkEffects()
-    restoreControls()
+    -- Возвращаем функцию очистки
+    return cleanup
 end
