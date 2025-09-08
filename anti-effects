@@ -1,87 +1,39 @@
 return function()
     local lighting = game:GetService("Lighting")
     local camera = game:GetService("Workspace").CurrentCamera
+    local RunService = game:GetService("RunService")
 
-    -- Функция для удаления DiscoEffect и настройки эффектов + фиксации FOV
+    -- Таблица для хранения всех соединений
+    local connections = {}
+
+    -- Функция для удаления DiscoEffect
     local function checkForDiscoEffect(child)
         if child.Name == "DiscoEffect" then
-            child:Destroy() -- Удаляем DiscoEffect
+            child:Destroy()
             
-            -- Удаляем Blur (если есть)
             local blur = lighting:FindFirstChild("Blur")
             if blur then
                 blur:Destroy()
             end
 
-            -- Включаем ColorCorrection (создаём, если нет) - исправлено название
             local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
             correction.Parent = lighting
             correction.Enabled = true
 
-            -- Фиксируем FieldOfView = 70 только при обнаружении DiscoEffect
-            camera.FieldOfView = 70 -- Устанавливаем сразу
-            
-            -- Настраиваем отслеживание изменений FOV
-            if not camera:GetPropertyChangedSignal("FieldOfView"):IsConnected() then
-                camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
-                    if camera.FieldOfView ~= 70 then
-                        camera.FieldOfView = 70 -- Принудительно возвращаем
-                    end
-                end)
-            end
+            camera.FieldOfView = 70
         end
     end
 
-    -- Проверяем существующие объекты
-    for _, child in ipairs(lighting:GetChildren()) do
-        checkForDiscoEffect(child)
-    end
-
-    -- Включаем отслеживание новых объектов
-    lighting.ChildAdded:Connect(checkForDiscoEffect)
-
-    local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local RunService = game:GetService("RunService")
-
-    local localPlayer = Players.LocalPlayer
-    local playerScripts = localPlayer:WaitForChild("PlayerScripts")
-    local camera = workspace.CurrentCamera
-
-    -- Безопасное получение модулей управления
-    local PlayerModule, controls, originalMoveFunction
-    
-    local function safeRequire(instance)
-        local success, result = pcall(function()
-            return require(instance)
-        end)
-        return success and result or nil
-    end
-
-    -- Пытаемся получить модули с защитой от ошибок
-    PlayerModule = safeRequire(playerScripts:WaitForChild("PlayerModule"))
-    if PlayerModule then
-        controls = PlayerModule:GetControls()
-    end
-
-    -- Функция для восстановления управления
-    local function restoreControls()
-        if controls then
-            pcall(function()
-                controls:Enable()
-            end)
-        end
-        
-        -- Восстанавливаем FieldOfView камеры
-        if camera then
+    -- Функция для проверки FOV
+    local function checkFOV()
+        if camera and camera.FieldOfView ~= 70 then
             camera.FieldOfView = 70
         end
     end
 
     -- Функция для проверки и удаления эффектов
     local function checkEffects()
-        -- Удаляем эффекты, если они есть
-        for _, effectName in ipairs({"BeeBlur", "ColorCorrection"}) do
+        for _, effectName in ipairs({"BeeBlur", "ColorCorrection", "Blur"}) do
             local effect = lighting:FindFirstChild(effectName)
             if effect then
                 effect:Destroy()
@@ -89,27 +41,38 @@ return function()
         end
     end
 
-    -- Слушатель для новых эффектов в Lighting
-    lighting.ChildAdded:Connect(function(child)
+    -- Настраиваем соединения
+    connections.discoConnection = lighting.ChildAdded:Connect(checkForDiscoEffect)
+    connections.effectsConnection = lighting.ChildAdded:Connect(function(child)
         if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
             child:Destroy()
-            restoreControls()
         end
     end)
-
-    -- Постоянная проверка
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
+    connections.fovConnection = camera:GetPropertyChangedSignal("FieldOfView"):Connect(checkFOV)
+    connections.heartbeatConnection = RunService.Heartbeat:Connect(function()
         checkEffects()
-        restoreControls()
+        checkFOV()
     end)
 
-    -- Очистка при выходе
+    -- Первоначальная проверка
+    for _, child in ipairs(lighting:GetChildren()) do
+        checkForDiscoEffect(child)
+    end
+    checkEffects()
+    checkFOV()
+
+    -- Функция очистки
     local function cleanup()
-        if connection then
-            connection:Disconnect()
+        for _, connection in pairs(connections) do
+            if connection and typeof(connection) == "RBXScriptConnection" then
+                connection:Disconnect()
+            end
         end
-        restoreControls()
+        
+        -- Восстанавливаем FOV
+        if camera then
+            camera.FieldOfView = 70
+        end
     end
 
     -- Возвращаем функцию очистки
