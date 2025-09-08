@@ -3,7 +3,6 @@ return function()
     local RunService = game:GetService('RunService')
     local UserInputService = game:GetService('UserInputService')
     local ReplicatedStorage = game:GetService('ReplicatedStorage')
-    local StarterGui = game:GetService('StarterGui')
     local ProximityPromptService = game:GetService('ProximityPromptService')
 
     local player = Players.LocalPlayer
@@ -17,160 +16,162 @@ return function()
     local promptTriggered = false
     local armCheckConnection = nil
     local promptConnection = nil
+    local activeConnections = {}
+    local screenGui = nil
 
     -- === REDESIGNED MENU ===
-    local screenGui = Instance.new('ScreenGui')
-    screenGui.Name = 'ForestSpiritControl'
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
-
-    local mainFrame = Instance.new('Frame')
-    mainFrame.Size = UDim2.new(0, 292, 0, 150)
-    mainFrame.Position = UDim2.new(0.5, -625, 0.3, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 40)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = screenGui
-
-    local uiCorner = Instance.new('UICorner')
-    uiCorner.CornerRadius = UDim.new(0, 10)
-    uiCorner.Parent = mainFrame
-
-    local mainShadow = Instance.new('UIStroke')
-    mainShadow.Thickness = 2
-    mainShadow.Color = Color3.fromRGB(60, 70, 80)
-    mainShadow.Parent = mainFrame
-
-    local headerFrame = Instance.new('Frame')
-    headerFrame.Size = UDim2.new(1, 0, 0, 33)
-    headerFrame.BackgroundColor3 = Color3.fromRGB(40, 45, 50)
-    headerFrame.BorderSizePixel = 0
-    headerFrame.Parent = mainFrame
-
-    local headerCorner = Instance.new('UICorner')
-    headerCorner.CornerRadius = UDim.new(0, 10)
-    headerCorner.Parent = headerFrame
-
-    local headerLabel = Instance.new('TextLabel')
-    headerLabel.Size = UDim2.new(1, 0, 1, 0)
-    headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = 'Auto-Steal v2'
-    headerLabel.TextColor3 = Color3.fromRGB(170, 255, 170)
-    headerLabel.TextSize = 15
-    headerLabel.Font = Enum.Font.GothamBold
-    headerLabel.Parent = headerFrame
-
-    local headerGradient = Instance.new('UIGradient')
-    headerGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 200, 120)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 160, 100)),
-    })
-    headerGradient.Rotation = 90
-    headerGradient.Parent = headerFrame
-
-    local statusPanel = Instance.new('Frame')
-    statusPanel.Size = UDim2.new(1, -17, 0, 50)
-    statusPanel.Position = UDim2.new(0, 8, 0, 42)
-    statusPanel.BackgroundColor3 = Color3.fromRGB(40, 45, 50)
-    statusPanel.BorderSizePixel = 0
-    statusPanel.Parent = mainFrame
-
-    local statusCorner = Instance.new('UICorner')
-    statusCorner.CornerRadius = UDim.new(0, 7)
-    statusCorner.Parent = statusPanel
-
-    local statusLabel = Instance.new('TextLabel')
-    statusLabel.Size = UDim2.new(1, -8, 1, -8)
-    statusLabel.Position = UDim2.new(0, 4, 0, 4)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = 'Press START to begin'
-    statusLabel.TextColor3 = Color3.fromRGB(200, 230, 200)
-    statusLabel.TextSize = 16
-    statusLabel.Font = Enum.Font.GothamBold
-    statusLabel.TextWrapped = true
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = statusPanel
-
-    local buttonsFrame = Instance.new('Frame')
-    buttonsFrame.Size = UDim2.new(1, -17, 0, 42)
-    buttonsFrame.Position = UDim2.new(0, 8, 0, 100)
-    buttonsFrame.BackgroundTransparency = 1
-    buttonsFrame.Parent = mainFrame
-
-    local actionBtn = Instance.new('TextButton')
-    actionBtn.Size = UDim2.new(1, 0, 1, 0)
-    actionBtn.BackgroundColor3 = Color3.fromRGB(80, 160, 100)
-    actionBtn.Text = 'START'
-    actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    actionBtn.TextSize = 18
-    actionBtn.Font = Enum.Font.GothamBold
-    actionBtn.Parent = buttonsFrame
-
-    local actionCorner = Instance.new('UICorner')
-    actionCorner.CornerRadius = UDim.new(0, 7)
-    actionCorner.Parent = actionBtn
-
-    local btnGradient = Instance.new('UIGradient')
-    btnGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 200, 120)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 160, 100)),
-    })
-    btnGradient.Rotation = 45
-    btnGradient.Parent = actionBtn
-
-    -- === DRAGGABLE FUNCTIONALITY ===
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-
-    headerFrame.InputBegan:Connect(function(input)
-        if
-            input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch
-        then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
+    local function createMenu()
+        if screenGui and screenGui.Parent then
+            screenGui:Destroy()
         end
-    end)
 
-    headerFrame.InputEnded:Connect(function(input)
-        if
-            input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch
-        then
-            dragging = false
-        end
-    end)
+        screenGui = Instance.new('ScreenGui')
+        screenGui.Name = 'ForestSpiritControl'
+        screenGui.ResetOnSpawn = false
+        screenGui.Parent = playerGui
 
-    UserInputService.InputChanged:Connect(function(input)
-        if
-            dragging
-            and (
-                input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch
-            )
-        then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+        local mainFrame = Instance.new('Frame')
+        mainFrame.Size = UDim2.new(0, 292, 0, 150)
+        mainFrame.Position = UDim2.new(0.5, -625, 0.3, 0)
+        mainFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 40)
+        mainFrame.BorderSizePixel = 0
+        mainFrame.Parent = screenGui
+
+        local uiCorner = Instance.new('UICorner')
+        uiCorner.CornerRadius = UDim.new(0, 10)
+        uiCorner.Parent = mainFrame
+
+        local mainShadow = Instance.new('UIStroke')
+        mainShadow.Thickness = 2
+        mainShadow.Color = Color3.fromRGB(60, 70, 80)
+        mainShadow.Parent = mainFrame
+
+        local headerFrame = Instance.new('Frame')
+        headerFrame.Size = UDim2.new(1, 0, 0, 33)
+        headerFrame.BackgroundColor3 = Color3.fromRGB(40, 45, 50)
+        headerFrame.BorderSizePixel = 0
+        headerFrame.Parent = mainFrame
+
+        local headerCorner = Instance.new('UICorner')
+        headerCorner.CornerRadius = UDim.new(0, 10)
+        headerCorner.Parent = headerFrame
+
+        local headerLabel = Instance.new('TextLabel')
+        headerLabel.Size = UDim2.new(1, 0, 1, 0)
+        headerLabel.BackgroundTransparency = 1
+        headerLabel.Text = 'Auto-Steal v2'
+        headerLabel.TextColor3 = Color3.fromRGB(170, 255, 170)
+        headerLabel.TextSize = 15
+        headerLabel.Font = Enum.Font.GothamBold
+        headerLabel.Parent = headerFrame
+
+        local headerGradient = Instance.new('UIGradient')
+        headerGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 200, 120)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 160, 100)),
+        })
+        headerGradient.Rotation = 90
+        headerGradient.Parent = headerFrame
+
+        local statusPanel = Instance.new('Frame')
+        statusPanel.Size = UDim2.new(1, -17, 0, 50)
+        statusPanel.Position = UDim2.new(0, 8, 0, 42)
+        statusPanel.BackgroundColor3 = Color3.fromRGB(40, 45, 50)
+        statusPanel.BorderSizePixel = 0
+        statusPanel.Parent = mainFrame
+
+        local statusCorner = Instance.new('UICorner')
+        statusCorner.CornerRadius = UDim.new(0, 7)
+        statusCorner.Parent = statusPanel
+
+        local statusLabel = Instance.new('TextLabel')
+        statusLabel.Size = UDim2.new(1, -8, 1, -8)
+        statusLabel.Position = UDim2.new(0, 4, 0, 4)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.Text = 'Press START to begin'
+        statusLabel.TextColor3 = Color3.fromRGB(200, 230, 200)
+        statusLabel.TextSize = 16
+        statusLabel.Font = Enum.Font.GothamBold
+        statusLabel.TextWrapped = true
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.Parent = statusPanel
+
+        local buttonsFrame = Instance.new('Frame')
+        buttonsFrame.Size = UDim2.new(1, -17, 0, 42)
+        buttonsFrame.Position = UDim2.new(0, 8, 0, 100)
+        buttonsFrame.BackgroundTransparency = 1
+        buttonsFrame.Parent = mainFrame
+
+        local actionBtn = Instance.new('TextButton')
+        actionBtn.Size = UDim2.new(1, 0, 1, 0)
+        actionBtn.BackgroundColor3 = Color3.fromRGB(80, 160, 100)
+        actionBtn.Text = 'START'
+        actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        actionBtn.TextSize = 18
+        actionBtn.Font = Enum.Font.GothamBold
+        actionBtn.Parent = buttonsFrame
+
+        local actionCorner = Instance.new('UICorner')
+        actionCorner.CornerRadius = UDim.new(0, 7)
+        actionCorner.Parent = actionBtn
+
+        local btnGradient = Instance.new('UIGradient')
+        btnGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 200, 120)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 160, 100)),
+        })
+        btnGradient.Rotation = 45
+        btnGradient.Parent = actionBtn
+
+        -- === DRAGGABLE FUNCTIONALITY ===
+        local dragging = false
+        local dragStart = nil
+        local startPos = nil
+
+        headerFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                dragStart = input.Position
+                startPos = mainFrame.Position
+            end
+        end)
+
+        headerFrame.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - dragStart
+                mainFrame.Position = UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset + delta.X,
+                    startPos.Y.Scale,
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+
+        return statusLabel, actionBtn, mainFrame
+    end
 
     -- === FUNCTION TO UPDATE STATUS LABEL ===
     local function updateStatus(text)
-        statusLabel.Text = text
+        if statusLabel then
+            statusLabel.Text = text
+        end
     end
 
+    local statusLabel, actionBtn, mainFrame = createMenu()
+
     -- === RESET STATUS ON CHARACTER RESPAWN ===
-    player.CharacterAdded:Connect(function(newCharacter)
+    table.insert(activeConnections, player.CharacterAdded:Connect(function(newCharacter)
         character = newCharacter
         hrp = newCharacter:WaitForChild('HumanoidRootPart')
         updateStatus('Ready to work')
-    end)
+    end))
 
     -- === SCRIPT FUNCTIONALITY ===
     local function FindDelivery()
@@ -262,9 +263,7 @@ return function()
             local distance = direction.Magnitude
 
             if distance <= 0.5 then
-                updateStatus(
-                    'Reached delivery target, distance: ' .. math.floor(distance)
-                )
+                updateStatus('Reached delivery target, distance: ' .. math.floor(distance))
                 lv.VectorVelocity = Vector3.zero
                 lv:Destroy()
                 connection:Disconnect()
@@ -288,8 +287,7 @@ return function()
             end
 
             local unitDir = direction.Unit
-            lv.VectorVelocity =
-                Vector3.new(unitDir.X * speed, unitDir.Y * speed, unitDir.Z * speed)
+            lv.VectorVelocity = Vector3.new(unitDir.X * speed, unitDir.Y * speed, unitDir.Z * speed)
             updateStatus('Moving to delivery, distance: ' .. math.floor(distance))
         end)
 
@@ -307,15 +305,10 @@ return function()
             if not isMoving then
                 break
             end
-            local dir = (
-                targetHitbox.Position
-                - Vector3.new(0, 6, 0)
-                - hrp.Position
-            )
+            local dir = (targetHitbox.Position - Vector3.new(0, 6, 0) - hrp.Position)
             if dir.Magnitude > 0 then
                 dir = dir.Unit
-                lv.VectorVelocity =
-                    Vector3.new(dir.X * speed, dir.Y * speed, dir.Z * speed)
+                lv.VectorVelocity = Vector3.new(dir.X * speed, dir.Y * speed, dir.Z * speed)
                 updateStatus('Decelerating for delivery, iteration: ' .. i)
             else
                 lv.VectorVelocity = Vector3.zero
@@ -354,9 +347,7 @@ return function()
                 return
             end
             lv.VectorVelocity = Vector3.new(0, -speed, 0)
-            updateStatus(
-                'Descending for delivery, current Y: ' .. math.floor(hrp.Position.Y)
-            )
+            updateStatus('Descending for delivery, current Y: ' .. math.floor(hrp.Position.Y))
         end)
 
         while not reachedY do
@@ -381,8 +372,7 @@ return function()
         if not model:IsA('Model') then
             return nil
         end
-        local primary = model.PrimaryPart
-            or model:FindFirstChildWhichIsA('BasePart')
+        local primary = model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart')
         if not primary then
             return nil
         end
@@ -421,14 +411,7 @@ return function()
                     local foundInitialTarget = false
                     if modelFolder then
                         for _, obj in ipairs(modelFolder:GetChildren()) do
-                            if
-                                obj:IsA('BasePart')
-                                and isSizeClose(
-                                    obj.Size,
-                                    Vector3.new(5, 1, 1),
-                                    0.01
-                                )
-                            then
+                            if obj:IsA('BasePart') and isSizeClose(obj.Size, Vector3.new(5, 1, 1), 0.01) then
                                 local dist = (obj.Position - hrp.Position).Magnitude
                                 if dist < 5 then
                                     if dist < closestDistance then
@@ -444,14 +427,7 @@ return function()
                         local decorations = plot:FindFirstChild('Decorations')
                         if decorations then
                             for _, obj in ipairs(decorations:GetChildren()) do
-                                if
-                                    obj:IsA('BasePart')
-                                    and isSizeClose(
-                                        obj.Size,
-                                        Vector3.new(45, 45, 2),
-                                        0.01
-                                    )
-                                then
+                                if obj:IsA('BasePart') and isSizeClose(obj.Size, Vector3.new(45, 45, 2), 0.01) then
                                     local posY = obj.Position.Y
                                     if posY >= 8 and posY <= 9.1 then
                                         local dist = (obj.Position - hrp.Position).Magnitude
@@ -468,14 +444,7 @@ return function()
                     local decorations = plot:FindFirstChild('Decorations')
                     if decorations then
                         for _, obj in ipairs(decorations:GetChildren()) do
-                            if
-                                obj:IsA('BasePart')
-                                and isSizeClose(
-                                    obj.Size,
-                                    Vector3.new(17, 10, 2),
-                                    0.01
-                                )
-                            then
+                            if obj:IsA('BasePart') and isSizeClose(obj.Size, Vector3.new(17, 10, 2), 0.01) then
                                 local dist = (obj.Position - hrp.Position).Magnitude
                                 if dist < closestDistance then
                                     closestDistance = dist
@@ -488,8 +457,7 @@ return function()
             elseif level == 3 then
                 local laserHitboxFolder = plot:FindFirstChild('LaserHitbox')
                 if laserHitboxFolder then
-                    local thirdFloorPart =
-                        laserHitboxFolder:FindFirstChild('ThirdFloor')
+                    local thirdFloorPart = laserHitboxFolder:FindFirstChild('ThirdFloor')
                     if thirdFloorPart then
                         local dist = (thirdFloorPart.Position - hrp.Position).Magnitude
                         if dist < closestDistance then
@@ -539,13 +507,13 @@ return function()
                 local dir = directionFunc()
                 if dir.Magnitude > 0 then
                     dir = dir.Unit
-                    hrp.Velocity =
-                        Vector3.new(dir.X * speed, hrp.Velocity.Y, dir.Z * speed)
+                    hrp.Velocity = Vector3.new(dir.X * speed, hrp.Velocity.Y, dir.Z * speed)
                 else
                     hrp.Velocity = Vector3.zero
                 end
             end
         end)
+        table.insert(activeConnections, conn)
     end
 
     local function moveUntilLinear(conditionFunc, directionFunc, callback)
@@ -589,26 +557,19 @@ return function()
                         isDescending = true
                     end
 
-                    lv.VectorVelocity =
-                        Vector3.new(dir.X * speed, verticalVelocity, dir.Z * speed)
+                    lv.VectorVelocity = Vector3.new(dir.X * speed, verticalVelocity, dir.Z * speed)
                 else
                     lv.VectorVelocity = Vector3.zero
                 end
 
                 if isDescending then
-                    updateStatus(
-                        'Moving to X = -410, descending: '
-                            .. math.floor(hrp.Position.Y)
-                            .. ' -> '
-                            .. math.floor(targetY)
-                    )
+                    updateStatus('Moving to X = -410, descending: ' .. math.floor(hrp.Position.Y) .. ' -> ' .. math.floor(targetY))
                 else
-                    updateStatus(
-                        'Moving to X = -410, height: ' .. math.floor(hrp.Position.Y)
-                    )
+                    updateStatus('Moving to X = -410, height: ' .. math.floor(hrp.Position.Y))
                 end
             end
         end)
+        table.insert(activeConnections, conn)
     end
 
     local function moveToTarget(target, level, fromThirdFloor)
@@ -638,9 +599,7 @@ return function()
                 local distance = (hrp.Position - pos).Magnitude
                 local reachedInitial = distance < 6
                 if reachedInitial then
-                    updateStatus(
-                        'Within 6 studs of initial target, switching to main target'
-                    )
+                    updateStatus('Within 6 studs of initial target, switching to main target')
                 end
                 return reachedInitial
             else
@@ -681,11 +640,11 @@ return function()
                             updateStatus('No target on floor 2')
                             isMoving = false
                             actionBtn.Text = 'START'
-                            actionBtn.BackgroundColor3 =
-                                Color3.fromRGB(80, 160, 100)
+                            actionBtn.BackgroundColor3 = Color3.fromRGB(80, 160, 100)
                         end
                     end
                 end)
+                table.insert(activeConnections, conn)
             else
                 updateStatus('Moving to X = -410')
                 moveUntilLinear(function()
@@ -693,9 +652,7 @@ return function()
                     local reached = distanceToTarget < 1
                     local stopEarly = distanceToTarget <= 5
                     if stopEarly then
-                        updateStatus(
-                            'Within 5 studs of X = -410, starting delivery'
-                        )
+                        updateStatus('Within 5 studs of X = -410, starting delivery')
                     end
                     return reached or stopEarly
                 end, function()
@@ -756,8 +713,8 @@ return function()
         actionBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
         updateStatus('Waiting for proximity prompt...')
 
-        promptConnection =
-            ProximityPromptService.PromptTriggered:Connect(handlePromptTriggered)
+        promptConnection = ProximityPromptService.PromptTriggered:Connect(handlePromptTriggered)
+        table.insert(activeConnections, promptConnection)
 
         armCheckConnection = RunService.Heartbeat:Connect(function()
             if not isActive then
@@ -798,6 +755,7 @@ return function()
                 end
             end
         end)
+        table.insert(activeConnections, armCheckConnection)
     end
 
     actionBtn.MouseButton1Click:Connect(function()
@@ -823,4 +781,46 @@ return function()
     end)
 
     updateStatus('Ready to work')
+
+    -- Функция очистки
+    local function cleanup()
+        -- Отключаем все соединения
+        for _, connection in ipairs(activeConnections) do
+            pcall(function() connection:Disconnect() end)
+        end
+        activeConnections = {}
+        
+        -- Останавливаем все процессы
+        isActive = false
+        isMoving = false
+        promptTriggered = false
+        
+        if promptConnection then
+            pcall(function() promptConnection:Disconnect() end)
+            promptConnection = nil
+        end
+        
+        if armCheckConnection then
+            pcall(function() armCheckConnection:Disconnect() end)
+            armCheckConnection = nil
+        end
+        
+        -- Удаляем меню
+        if screenGui and screenGui.Parent then
+            screenGui:Destroy()
+            screenGui = nil
+        end
+        
+        -- Очищаем физические объекты
+        if hrp and hrp.Parent then
+            for _, obj in ipairs(hrp:GetChildren()) do
+                if obj:IsA('LinearVelocity') or obj:IsA('Attachment') then
+                    obj:Destroy()
+                end
+            end
+        end
+    end
+
+    -- Возвращаем функцию очистки
+    return cleanup
 end
