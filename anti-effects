@@ -3,7 +3,7 @@ return function()
     local camera = game:GetService("Workspace").CurrentCamera
     local RunService = game:GetService("RunService")
 
-    -- Таблица для хранения соединений
+    -- Таблица для хранения всех соединений
     local connections = {}
 
     -- Функция для удаления DiscoEffect и настройки эффектов + фиксации FOV
@@ -17,7 +17,7 @@ return function()
                 blur:Destroy()
             end
 
-            -- Включаем ColorCorrection (создаём, если нет)
+            -- Включаем ColorCorrection (создаём, если нет) - исправлено название
             local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
             correction.Parent = lighting
             correction.Enabled = true
@@ -41,18 +41,19 @@ return function()
     local localPlayer = Players.LocalPlayer
     local playerScripts = localPlayer:WaitForChild("PlayerScripts")
 
-    -- Безопасное получение модулей
-    local PlayerModule, controls, originalMoveFunction
+    -- Безопасное получение модулей управления
+    local PlayerModule, controls
     
-    local function safeRequire(obj)
-        local success, result = pcall(function()
-            return require(obj)
-        end)
-        return success and result or nil
-    end
+    pcall(function()
+        PlayerModule = require(playerScripts:WaitForChild("PlayerModule"))
+        if PlayerModule then
+            controls = PlayerModule:GetControls()
+        end
+    end)
 
     -- Функция для восстановления управления
     local function restoreControls()
+        -- Восстанавливаем управление через Enable (более надежный способ)
         if controls then
             pcall(function()
                 controls:Enable()
@@ -67,6 +68,7 @@ return function()
 
     -- Функция для проверки и удаления эффектов
     local function checkEffects()
+        -- Удаляем эффекты, если они есть
         for _, effectName in ipairs({"BeeBlur", "ColorCorrection", "Blur"}) do
             local effect = lighting:FindFirstChild(effectName)
             if effect then
@@ -75,11 +77,11 @@ return function()
         end
     end
 
-    -- Слушатель для новых эффектов
+    -- Слушатель для новых эффектов в Lighting
     connections.effectsConnection = lighting.ChildAdded:Connect(function(child)
         if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
             child:Destroy()
-            restoreControls()
+            restoreControls() -- Дополнительно восстанавливаем управление
         end
     end)
 
@@ -90,10 +92,12 @@ return function()
         end
     end)
 
-    -- Постоянная проверка эффектов
+    -- Постоянная проверка (на случай, если ChildAdded не сработает)
     connections.heartbeatConnection = RunService.Heartbeat:Connect(function()
         checkEffects()
-        restoreControls()
+        restoreControls() -- Постоянно восстанавливаем управление
+        
+        -- Дополнительная проверка FOV
         if camera.FieldOfView ~= 70 then
             camera.FieldOfView = 70
         end
@@ -106,16 +110,15 @@ return function()
 
     -- Функция очистки
     local function cleanup()
+        -- Отключаем все соединения
         for _, connection in pairs(connections) do
             if connection and typeof(connection) == "RBXScriptConnection" then
                 connection:Disconnect()
             end
         end
         
-        -- Восстанавливаем FOV
-        if camera then
-            camera.FieldOfView = 70
-        end
+        -- Восстанавливаем управление и FOV
+        restoreControls()
     end
 
     -- Возвращаем функцию очистки
