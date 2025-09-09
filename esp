@@ -39,7 +39,7 @@ local ESPModule = {
         lastBestName = '',
         lastBestSalary = '',
         currentColor = Color3.fromRGB(255, 255, 150),
-        FONT_WEIGHT = Enum.Font.SourceSans,
+        FONT_WEIGHT = Enum.FontWeight.Bold,
         currentTextOffset = 12,
     },
 }
