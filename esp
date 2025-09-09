@@ -1,491 +1,693 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
-local Lighting = game:GetService("Lighting")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService('Players')
+local RunService = game:GetService('RunService')
+local Workspace = game:GetService('Workspace')
+local TweenService = game:GetService('TweenService')
+local TextService = game:GetService('TextService')
 
--- Основной модуль ESP
-local ESP = {
-    Enabled = true,
-    Objects = {},
-    Settings = {
-        Boxes = true,
-        Names = true,
-        Tracers = true,
-        Health = true,
-        Distance = true,
-        TeamCheck = false,
-        TeamColor = true,
-        FillColor = Color3.fromRGB(255, 255, 255),
-        FillTransparency = 0.5,
-        OutlineColor = Color3.fromRGB(0, 0, 0),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        TextSize = 14,
-        Font = Enum.Font.SourceSansBold,
-        MaxDistance = 1000,
-        TracerOrigin = "Bottom", -- Bottom, Top, Mouse
-        TracerThickness = 1,
-        BoxThickness = 1
-    }
+-- Общие настройки
+local ESPModule = {
+    TimerESP = {
+        Enabled = true,
+        ActiveTimers = {},
+    },
+    NameTags = {
+        Enabled = true,
+        ActiveNameTags = {},
+        Connections = {},
+    },
+    WallHack = {
+        Enabled = true,
+        FillColor = Color3.fromRGB(0, 170, 255),
+        FillTransparency = 0.22,
+        OutlineColor = Color3.fromRGB(0, 170, 255),
+        OutlineTransparency = 0.08,
+        Highlights = {},
+    },
+    PetDisplay = {
+        Enabled = true,
+        MAX_DISTANCE = 500,
+        AUTO_COLOR = true,
+        TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
+        TEXT_STROKE_TRANSPARENCY = 0,
+        FONT = Enum.Font.SourceSans,
+        CHECK_INTERVAL = 3,
+        TEXT_SIZE = 30,
+        TEXT_OFFSET_NEAR = 12,
+        TEXT_OFFSET_FAR = 20,
+        currentBillboard = nil,
+        lastBestValue = 0,
+        lastBestName = '',
+        lastBestSalary = '',
+        currentColor = Color3.fromRGB(255, 255, 150),
+        FONT_WEIGHT = Enum.Font.SourceSans,
+        currentTextOffset = 12,
+    },
 }
 
--- Кэшированные переменные
+-- Кэшируем часто используемые объекты
 local localPlayer = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 local heartbeat = RunService.Heartbeat
-local worldToViewportPoint = camera.WorldToViewportPoint
 
--- Утилиты
+-- Предварительные вычисления
 local math_floor = math.floor
-local math_abs = math.abs
-local math_clamp = math.clamp
 local string_format = string.format
+local string_upper = string.upper
+local string_gsub = string.gsub
 local task_wait = task.wait
 local task_spawn = task.spawn
-local table_insert = table.insert
-local table_remove = table.remove
+local math_clamp = math.clamp
 
--- Цвета для здоровья
-local function GetHealthColor(health, maxHealth)
-    local percentage = health / maxHealth
-    if percentage > 0.5 then
-        return Color3.fromRGB(0, 255, 0):Lerp(Color3.fromRGB(255, 255, 0), (1 - percentage) * 2)
+-- ==================== TIMER ESP ====================
+
+local function UpdateTimerText(timerText, timeString)
+    if timeString == '0s' then
+        timerText.Text = 'UNLOCKED'
+        timerText.TextColor3 = Color3.fromRGB(0, 255, 0)
+        timerText.Font = Enum.Font.SciFi
     else
-        return Color3.fromRGB(255, 255, 0):Lerp(Color3.fromRGB(255, 0, 0), (1 - percentage) * 2)
+        timerText.Text = timeString
+        timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        timerText.Font = Enum.Font.SciFi
     end
 end
 
--- Класс ESP объекта
-local ESPObject = {}
-ESPObject.__index = ESPObject
-
-function ESPObject.new(player, character)
-    local self = setmetatable({}, ESPObject)
-    
-    self.Player = player
-    self.Character = character
-    self.Humanoid = character:WaitForChild("Humanoid")
-    self.HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
-    self.Enabled = true
-    
-    self:CreateObjects()
-    self:Update()
-    
-    return self
+local function CalculateYOffset(podiumCount)
+    if podiumCount > 18 then
+        return -26.27
+    elseif podiumCount > 10 then
+        return -17.27
+    else
+        return -8.27
+    end
 end
 
-function ESPObject:CreateObjects()
-    -- Box
-    self.Box = Drawing.new("Quad")
-    self.Box.Visible = false
-    self.Box.Filled = ESP.Settings.Boxes
-    self.Box.Color = ESP.Settings.FillColor
-    self.Box.Transparency = ESP.Settings.FillTransparency
-    self.Box.Thickness = ESP.Settings.BoxThickness
-    
-    -- Outline
-    self.Outline = Drawing.new("Quad")
-    self.Outline.Visible = false
-    self.Outline.Filled = false
-    self.Outline.Color = ESP.Settings.OutlineColor
-    self.Outline.Thickness = ESP.Settings.BoxThickness + 2
-    
-    -- Tracer
-    self.Tracer = Drawing.new("Line")
-    self.Tracer.Visible = false
-    self.Tracer.Color = ESP.Settings.TextColor
-    self.Tracer.Thickness = ESP.Settings.TracerThickness
-    
-    -- Name
-    self.Name = Drawing.new("Text")
-    self.Name.Visible = false
-    self.Name.Color = ESP.Settings.TextColor
-    self.Name.Size = ESP.Settings.TextSize
-    self.Name.Font = ESP.Settings.Font
-    self.Name.Outline = true
-    self.Name.OutlineColor = ESP.Settings.OutlineColor
-    self.Name.Center = true
-    
-    -- Health
-    self.Health = Drawing.new("Text")
-    self.Health.Visible = false
-    self.Health.Size = ESP.Settings.TextSize
-    self.Health.Font = ESP.Settings.Font
-    self.Health.Outline = true
-    self.Health.OutlineColor = ESP.Settings.OutlineColor
-    self.Health.Center = true
-    
-    -- Distance
-    self.Distance = Drawing.new("Text")
-    self.Distance.Visible = false
-    self.Distance.Color = ESP.Settings.TextColor
-    self.Distance.Size = ESP.Settings.TextSize
-    self.Distance.Font = ESP.Settings.Font
-    self.Distance.Outline = true
-    self.Distance.OutlineColor = ESP.Settings.OutlineColor
-    self.Distance.Center = true
-end
+local function CreateTimerDisplay(hitbox, remainingTime)
+    if not hitbox or not remainingTime then return end
 
-function ESPObject:Update()
-    if not self.Enabled or not ESP.Enabled then
-        self:Hide()
-        return
+    if ESPModule.TimerESP.ActiveTimers[hitbox] then
+        local timerData = ESPModule.TimerESP.ActiveTimers[hitbox]
+        if timerData.Billboard then timerData.Billboard:Destroy() end
+        if timerData.Part then timerData.Part:Destroy() end
+        if timerData.Connection then timerData.Connection:Disconnect() end
+        ESPModule.TimerESP.ActiveTimers[hitbox] = nil
     end
-    
-    if not self.Character or not self.Character.Parent or not self.Humanoid or not self.HumanoidRootPart then
-        self:Destroy()
-        return
-    end
-    
-    local health = self.Humanoid.Health
-    local maxHealth = self.Humanoid.MaxHealth
-    
-    if health <= 0 then
-        self:Hide()
-        return
-    end
-    
-    -- Team check
-    if ESP.Settings.TeamCheck and self.Player.Team == localPlayer.Team then
-        self:Hide()
-        return
-    end
-    
-    -- Distance check
-    local distance = (self.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude
-    if distance > ESP.Settings.MaxDistance then
-        self:Hide()
-        return
-    end
-    
-    -- World to screen
-    local position, onScreen = worldToViewportPoint(camera, self.HumanoidRootPart.Position)
-    if not onScreen then
-        self:Hide()
-        return
-    end
-    
-    -- Calculate box size based on distance
-    local scale = math_clamp(1000 / distance, 0.5, 2)
-    local size = Vector2.new(4 * scale, 6 * scale)
-    
-    -- Box points
-    local topLeft = Vector2.new(position.X - size.X, position.Y - size.Y)
-    local topRight = Vector2.new(position.X + size.X, position.Y - size.Y)
-    local bottomRight = Vector2.new(position.X + size.X, position.Y + size.Y)
-    local bottomLeft = Vector2.new(position.X - size.X, position.Y + size.Y)
-    
-    -- Update box
-    if ESP.Settings.Boxes then
-        self.Box.PointA = topLeft
-        self.Box.PointB = topRight
-        self.Box.PointC = bottomRight
-        self.Box.PointD = bottomLeft
-        self.Box.Visible = true
-        
-        self.Outline.PointA = topLeft
-        self.Outline.PointB = topRight
-        self.Outline.PointC = bottomRight
-        self.Outline.PointD = bottomLeft
-        self.Outline.Visible = true
-        
-        -- Team color
-        if ESP.Settings.TeamColor then
-            self.Box.Color = self.Player.TeamColor.Color
+
+    local plot = hitbox.Parent
+    local animalPodiums = plot:FindFirstChild('AnimalPodiums')
+    local podiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
+    local y_offset = CalculateYOffset(podiumCount)
+
+    local timerPart = Instance.new('Part')
+    timerPart.Name = 'TimerPart'
+    timerPart.Size = Vector3.new(4, 1, 1)
+    timerPart.Transparency = 1
+    timerPart.CanCollide = false
+    timerPart.Anchored = true
+    timerPart.Parent = workspace
+    timerPart.CFrame = hitbox.CFrame * CFrame.new(0, y_offset, 0)
+
+    local billboardTimer = Instance.new('BillboardGui')
+    billboardTimer.Name = 'TimerDisplay'
+    billboardTimer.Size = UDim2.new(5, 0, 2, 0)
+    billboardTimer.Adornee = timerPart
+    billboardTimer.StudsOffset = Vector3.new(0, 0, 0)
+    billboardTimer.AlwaysOnTop = true
+    billboardTimer.MaxDistance = 10000
+    billboardTimer.Parent = timerPart
+
+    local timerText = Instance.new('TextLabel')
+    timerText.Name = 'TimerText'
+    timerText.Size = UDim2.new(1, 0, 1, 0)
+    timerText.TextSize = 26
+    timerText.BackgroundTransparency = 1
+    timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    timerText.TextStrokeColor3 = Color3.new(0, 0, 0)
+    timerText.TextStrokeTransparency = 0.1
+    timerText.Font = Enum.Font.SciFi
+    timerText.TextXAlignment = Enum.TextXAlignment.Center
+    timerText.TextYAlignment = Enum.TextYAlignment.Center
+
+    UpdateTimerText(timerText, remainingTime.Text)
+    timerText.Parent = billboardTimer
+
+    local currentYOffset = y_offset
+    local connection = heartbeat:Connect(function()
+        if hitbox and hitbox.Parent then
+            local newPodiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
+            local newYOffset = CalculateYOffset(newPodiumCount)
+            
+            if newYOffset ~= currentYOffset then
+                currentYOffset = newYOffset
+                timerPart.CFrame = hitbox.CFrame * CFrame.new(0, currentYOffset, 0)
+            end
         else
-            self.Box.Color = ESP.Settings.FillColor
+            connection:Disconnect()
+            if timerPart then timerPart:Destroy() end
         end
-    else
-        self.Box.Visible = false
-        self.Outline.Visible = false
-    end
-    
-    -- Update tracer
-    if ESP.Settings.Tracers then
-        local origin
-        if ESP.Settings.TracerOrigin == "Bottom" then
-            origin = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
-        elseif ESP.Settings.TracerOrigin == "Top" then
-            origin = Vector2.new(camera.ViewportSize.X / 2, 0)
-        else -- Mouse
-            local mousePos = UserInputService:GetMouseLocation()
-            origin = Vector2.new(mousePos.X, mousePos.Y)
-        end
-        
-        self.Tracer.From = origin
-        self.Tracer.To = Vector2.new(position.X, position.Y + size.Y)
-        self.Tracer.Visible = true
-        self.Tracer.Color = ESP.Settings.TeamColor and self.Player.TeamColor.Color or ESP.Settings.TextColor
-    else
-        self.Tracer.Visible = false
-    end
-    
-    -- Update name
-    if ESP.Settings.Names then
-        self.Name.Position = Vector2.new(position.X, position.Y - size.Y - 20)
-        self.Name.Text = self.Player.Name
-        self.Name.Visible = true
-        self.Name.Color = ESP.Settings.TeamColor and self.Player.TeamColor.Color or ESP.Settings.TextColor
-    else
-        self.Name.Visible = false
-    end
-    
-    -- Update health
-    if ESP.Settings.Health then
-        self.Health.Position = Vector2.new(position.X, position.Y + size.Y + 5)
-        self.Health.Text = string_format("%d/%d", math_floor(health), math_floor(maxHealth))
-        self.Health.Color = GetHealthColor(health, maxHealth)
-        self.Health.Visible = true
-    else
-        self.Health.Visible = false
-    end
-    
-    -- Update distance
-    if ESP.Settings.Distance then
-        self.Distance.Position = Vector2.new(position.X, position.Y + size.Y + 25)
-        self.Distance.Text = string_format("%d studs", math_floor(distance))
-        self.Distance.Visible = true
-        self.Distance.Color = ESP.Settings.TeamColor and self.Player.TeamColor.Color or ESP.Settings.TextColor
-    else
-        self.Distance.Visible = false
-    end
-end
+    end)
 
-function ESPObject:Hide()
-    self.Box.Visible = false
-    self.Outline.Visible = false
-    self.Tracer.Visible = false
-    self.Name.Visible = false
-    self.Health.Visible = false
-    self.Distance.Visible = false
-end
+    ESPModule.TimerESP.ActiveTimers[hitbox] = {
+        Billboard = billboardTimer,
+        Part = timerPart,
+        Connection = connection,
+        TextLabel = timerText,
+        CurrentOffset = y_offset,
+    }
 
-function ESPObject:Destroy()
-    self:Hide()
-    
-    if self.Box then self.Box:Remove() end
-    if self.Outline then self.Outline:Remove() end
-    if self.Tracer then self.Tracer:Remove() end
-    if self.Name then self.Name:Remove() end
-    if self.Health then self.Health:Remove() end
-    if self.Distance then self.Distance:Remove() end
-    
-    setmetatable(self, nil)
-end
-
--- Основные функции ESP
-function ESP:Toggle(state)
-    self.Enabled = state
-    for _, object in pairs(self.Objects) do
-        if state then
-            object:Update()
-        else
-            object:Hide()
-        end
-    end
-end
-
-function ESP:GetPlayerESP(player)
-    return self.Objects[player]
-end
-
-function ESP:AddPlayer(player)
-    if self.Objects[player] then return end
-    
-    local function characterAdded(character)
-        if self.Objects[player] then
-            self.Objects[player]:Destroy()
-        end
-        
-        task_wait(1) -- Wait for character to load
-        
-        if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
-            self.Objects[player] = ESPObject.new(player, character)
-        end
-    end
-    
-    if player.Character then
-        characterAdded(player.Character)
-    end
-    
-    player.CharacterAdded:Connect(characterAdded)
-    player.CharacterRemoving:Connect(function()
-        if self.Objects[player] then
-            self.Objects[player]:Destroy()
-            self.Objects[player] = nil
-        end
+    remainingTime:GetPropertyChangedSignal('Text'):Connect(function()
+        UpdateTimerText(timerText, remainingTime.Text)
     end)
 end
 
-function ESP:RemovePlayer(player)
-    if self.Objects[player] then
-        self.Objects[player]:Destroy()
-        self.Objects[player] = nil
+local function SetupPlotTimer(plot)
+    if not plot then return end
+
+    local Purchases = plot:FindFirstChild('Purchases')
+    if not Purchases then return end
+
+    local Plotblock = Purchases:FindFirstChild('PlotBlock')
+    if not Plotblock then return end
+
+    local main = Plotblock:FindFirstChild('Main')
+    local hitbox = plot:FindFirstChild('StealHitbox')
+    if not main or not hitbox then return end
+
+    local billboardgui = main:FindFirstChild('BillboardGui')
+    if not billboardgui then return end
+
+    local remainingTime = billboardgui:FindFirstChild('RemainingTime')
+    if not remainingTime then return end
+
+    if ESPModule.TimerESP.Enabled then
+        CreateTimerDisplay(hitbox, remainingTime)
     end
 end
 
-function ESP:UpdateAll()
-    for _, object in pairs(self.Objects) do
-        object:Update()
+local function InitializeTimerESP()
+    for hitbox, timerData in pairs(ESPModule.TimerESP.ActiveTimers) do
+        if timerData then
+            if timerData.Billboard then timerData.Billboard:Destroy() end
+            if timerData.Part then timerData.Part:Destroy() end
+            if timerData.Connection then timerData.Connection:Disconnect() end
+        end
+    end
+    ESPModule.TimerESP.ActiveTimers = {}
+
+    local Plots = Workspace:FindFirstChild('Plots')
+    if Plots then
+        for _, plot in pairs(Plots:GetChildren()) do
+            task_spawn(function() SetupPlotTimer(plot) end)
+        end
+
+        Plots.ChildAdded:Connect(function(plot)
+            task_wait(1)
+            SetupPlotTimer(plot)
+        end)
     end
 end
 
-function ESP:ClearAll()
-    for player, object in pairs(self.Objects) do
-        object:Destroy()
-    end
-    self.Objects = {}
-end
+-- ==================== NAME TAGS ====================
 
--- Инициализация ESP
-function ESP:Initialize()
-    self:ClearAll()
+local function CreateNameTag(player)
+    if not player or not player.Character then return end
     
-    -- Добавляем существующих игроков
+    local character = player.Character
+    local humanoidRootPart = character:FindFirstChild('HumanoidRootPart')
+    if not humanoidRootPart then return end
+
+    -- Удаляем старый тег если есть
+    if ESPModule.NameTags.ActiveNameTags[player] then
+        ESPModule.NameTags.ActiveNameTags[player]:Destroy()
+    end
+
+    -- Создаем BillboardGui для имени
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'NameTag'
+    billboard.Size = UDim2.new(4, 0, 1, 0)
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 1000
+    billboard.Adornee = humanoidRootPart
+    billboard.Parent = humanoidRootPart
+
+    local textLabel = Instance.new('TextLabel')
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = player.Name
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextStrokeTransparency = 0.3
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextSize = 20
+    textLabel.Font = Enum.Font.SourceSans
+    textLabel.TextScaled = false
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.Parent = billboard
+
+    ESPModule.NameTags.ActiveNameTags[player] = billboard
+end
+
+local function RemovePlayerNameTag(player)
+    if ESPModule.NameTags.ActiveNameTags[player] then
+        ESPModule.NameTags.ActiveNameTags[player]:Destroy()
+        ESPModule.NameTags.ActiveNameTags[player] = nil
+    end
+end
+
+local function InitializeNameTags()
+    -- Очищаем все существующие теги
+    for player, tagData in pairs(ESPModule.NameTags.ActiveNameTags) do
+        RemovePlayerNameTag(player)
+    end
+    ESPModule.NameTags.ActiveNameTags = {}
+    
+    -- Очищаем все соединения
+    for player, connection in pairs(ESPModule.NameTags.Connections) do
+        connection:Disconnect()
+    end
+    ESPModule.NameTags.Connections = {}
+
+    -- Создаем теги для всех текущих игроков
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
-            self:AddPlayer(player)
+            -- Немедленная попытка создания тега
+            if player.Character then
+                task.spawn(function()
+                    task.wait(0.5)
+                    CreateNameTag(player)
+                end)
+            end
+            
+            -- Подписываемся на будущие персонажи
+            ESPModule.NameTags.Connections[player] = player.CharacterAdded:Connect(function(character)
+                task.wait(1)
+                if ESPModule.NameTags.Enabled then
+                    CreateNameTag(player)
+                end
+            end)
         end
     end
-    
-    -- Обработка новых игроков
+
+    -- Подписываемся на новых игроков
     Players.PlayerAdded:Connect(function(player)
         if player ~= localPlayer then
-            self:AddPlayer(player)
-        end
-    end)
-    
-    Players.PlayerRemoving:Connect(function(player)
-        self:RemovePlayer(player)
-    end)
-    
-    -- Основной цикл обновления
-    local connection
-    connection = heartbeat:Connect(function()
-        if not self.Enabled then return end
-        
-        camera = Workspace.CurrentCamera
-        if not camera then return end
-        
-        for _, object in pairs(self.Objects) do
-            object:Update()
-        end
-    end)
-    
-    -- Очистка при выходе
-    localPlayer.AncestryChanged:Connect(function()
-        if not localPlayer.Parent then
-            connection:Disconnect()
-            self:ClearAll()
+            task.wait(1)
+            
+            ESPModule.NameTags.Connections[player] = player.CharacterAdded:Connect(function(character)
+                task.wait(1)
+                if ESPModule.NameTags.Enabled then
+                    CreateNameTag(player)
+                end
+            end)
+            
+            -- Если у игрока уже есть персонаж
+            if player.Character then
+                task.wait(1)
+                CreateNameTag(player)
+            end
         end
     end)
 end
 
--- Дополнительные функции
-function ESP:SetSetting(setting, value)
-    if self.Settings[setting] ~= nil then
-        self.Settings[setting] = value
-        self:UpdateAll()
+local function ToggleNameTags(state)
+    ESPModule.NameTags.Enabled = state
+
+    if state then
+        InitializeNameTags()
+    else
+        -- Полная очистка
+        for player, tagData in pairs(ESPModule.NameTags.ActiveNameTags) do
+            RemovePlayerNameTag(player)
+        end
+        ESPModule.NameTags.ActiveNameTags = {}
     end
 end
 
-function ESP:GetSettings()
-    return self.Settings
+-- ==================== WALL HACK ====================
+
+local function createHighlight(character, player)
+    if not character or ESPModule.WallHack.Highlights[player] then return end
+
+    local highlight = Instance.new('Highlight')
+    highlight.Name = 'WallHackHighlight'
+    highlight.FillColor = ESPModule.WallHack.FillColor
+    highlight.FillTransparency = ESPModule.WallHack.FillTransparency
+    highlight.OutlineColor = ESPModule.WallHack.OutlineColor
+    highlight.OutlineTransparency = ESPModule.WallHack.OutlineTransparency
+    highlight.Adornee = character
+    highlight.Parent = character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+    ESPModule.WallHack.Highlights[player] = highlight
+
+    -- Очистка при удалении персонажа
+    character.AncestryChanged:Connect(function()
+        if not character.Parent then
+            if highlight then highlight:Destroy() end
+            ESPModule.WallHack.Highlights[player] = nil
+        end
+    end)
 end
 
--- Автоматическая инициализация
+local function onPlayerAdded(player)
+    if player == localPlayer then return end
+    
+    local function handleCharacterAdded(character)
+        task.wait(1)
+        if ESPModule.WallHack.Enabled then
+            createHighlight(character, player)
+        end
+    end
+    
+    player.CharacterAdded:Connect(handleCharacterAdded)
+    
+    if player.Character then
+        handleCharacterAdded(player.Character)
+    end
+end
+
+local function onPlayerRemoving(player)
+    if ESPModule.WallHack.Highlights[player] then
+        ESPModule.WallHack.Highlights[player]:Destroy()
+        ESPModule.WallHack.Highlights[player] = nil
+    end
+end
+
+local function InitializeWallHack()
+    for player, highlight in pairs(ESPModule.WallHack.Highlights) do
+        if highlight then highlight:Destroy() end
+    end
+    ESPModule.WallHack.Highlights = {}
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            task.spawn(function()
+                task.wait(0.5)
+                createHighlight(player.Character, player)
+            end)
+        end
+    end
+end
+
+local function ToggleWallHack(state)
+    ESPModule.WallHack.Enabled = state
+    
+    if state then
+        InitializeWallHack()
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= localPlayer then
+                onPlayerAdded(player)
+            end
+        end
+    else
+        for player, highlight in pairs(ESPModule.WallHack.Highlights) do
+            if highlight then highlight:Destroy() end
+        end
+        ESPModule.WallHack.Highlights = {}
+    end
+end
+
+-- ==================== PET DISPLAY ====================
+
+local function generateLightColor()
+    return Color3.fromRGB(
+        math.random(160, 255),
+        math.random(160, 255),
+        math.random(160, 255)
+    )
+end
+
+local function formatSalaryText(value)
+    if not value then return '0/S' end
+    value = tonumber(value) or 0
+
+    if value >= 1000000 then
+        return string_format('%.1fM/s', value / 1000000)
+    elseif value >= 1000 then
+        return string_format('%.1fK/s', value / 1000)
+    else
+        return string_format('%d/s', math_floor(value))
+    end
+end
+
+local function parseSalaryValue(text)
+    if not text then return 0 end
+    text = string_upper(text):gsub('%s+', ''):gsub(',', '')
+    local numberPart = text:gsub('[^%d%.]', '')
+    local number = tonumber(numberPart) or 0
+
+    if text:find('M/S') then
+        return number * 1000000
+    elseif text:find('K/S') then
+        return number * 1000
+    else
+        return number
+    end
+end
+
+local function clearPetBillboards()
+    if ESPModule.PetDisplay.currentBillboard then
+        if ESPModule.PetDisplay.currentBillboard.Billboard then 
+            ESPModule.PetDisplay.currentBillboard.Billboard:Destroy() 
+        end
+        if ESPModule.PetDisplay.currentBillboard.Connection then 
+            ESPModule.PetDisplay.currentBillboard.Connection:Disconnect() 
+        end
+    end
+    ESPModule.PetDisplay.currentBillboard = nil
+    ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.TEXT_OFFSET_NEAR
+end
+
+local function findMostValuablePet()
+    local bestValue = 0
+    local bestSpawn, bestName, bestSalary = nil, '', ''
+
+    local Plots = Workspace:FindFirstChild('Plots')
+    if not Plots then return nil, '', '', 0 end
+
+    for _, plotInstance in ipairs(Plots:GetChildren()) do
+        if not plotInstance:FindFirstChild('PlotSign') or not plotInstance:FindFirstChild('AnimalPodiums') then
+            continue
+        end
+
+        local isPlayerPlot = plotInstance.PlotSign:FindFirstChild('YourBase') and plotInstance.PlotSign.YourBase.Enabled
+        if not isPlayerPlot then
+            for _, podium in ipairs(plotInstance.AnimalPodiums:GetChildren()) do
+                if not podium:FindFirstChild('Base') or not podium.Base:FindFirstChild('Spawn') then
+                    continue
+                end
+
+                local spawn = podium.Base.Spawn
+                if not spawn:FindFirstChild('Attachment') then
+                    continue
+                end
+
+                local overhead = spawn.Attachment:FindFirstChild('AnimalOverhead')
+                if overhead and overhead:FindFirstChild('Generation') and overhead:FindFirstChild('DisplayName') then
+                    local salaryText = overhead.Generation.Text
+                    local value = parseSalaryValue(salaryText)
+
+                    if value > bestValue then
+                        bestValue = value
+                        bestSpawn = spawn
+                        bestName = overhead.DisplayName.Text
+                        bestSalary = salaryText
+                    end
+                end
+            end
+        end
+    end
+
+    return bestSpawn, bestName, bestSalary, bestValue
+end
+
+local function calculateTextOffset(distance)
+    local normalizedDistance = math_clamp(distance / ESPModule.PetDisplay.MAX_DISTANCE, 0, 1)
+    return ESPModule.PetDisplay.TEXT_OFFSET_NEAR + 
+           (ESPModule.PetDisplay.TEXT_OFFSET_FAR - ESPModule.PetDisplay.TEXT_OFFSET_NEAR) * normalizedDistance
+end
+
+local function createPetBillboard(spawn, name, salaryText)
+    clearPetBillboards()
+    if not spawn or not ESPModule.PetDisplay.Enabled then return end
+
+    if ESPModule.PetDisplay.AUTO_COLOR then
+        ESPModule.PetDisplay.currentColor = generateLightColor()
+    end
+
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'PetDisplay'
+    billboard.Adornee = spawn
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(12, 0, 4, 0)
+    billboard.StudsOffset = Vector3.new(0, ESPModule.PetDisplay.currentTextOffset, 0)
+    billboard.MaxDistance = ESPModule.PetDisplay.MAX_DISTANCE
+    billboard.Parent = spawn
+
+    local textLabel = Instance.new('TextLabel')
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = name .. '\n' .. formatSalaryText(parseSalaryValue(salaryText))
+    textLabel.TextColor3 = ESPModule.PetDisplay.currentColor
+    textLabel.TextStrokeColor3 = ESPModule.PetDisplay.TEXT_STROKE_COLOR
+    textLabel.TextStrokeTransparency = ESPModule.PetDisplay.TEXT_STROKE_TRANSPARENCY
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextSize = ESPModule.PetDisplay.TEXT_SIZE
+    textLabel.Font = ESPModule.PetDisplay.FONT
+    textLabel.TextScaled = false
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.LineHeight = 0.8
+    textLabel.Parent = billboard
+
+    local lastUpdate = os.clock()
+    local connection = heartbeat:Connect(function()
+        local currentTime = os.clock()
+        local deltaTime = currentTime - lastUpdate
+        lastUpdate = currentTime
+        
+        if not spawn or not spawn.Parent or not billboard or not billboard.Parent then
+            connection:Disconnect()
+            if billboard then billboard:Destroy() end
+            return
+        end
+
+        local camera = Workspace.CurrentCamera
+        if camera then
+            local distance = (spawn.Position - camera.CFrame.Position).Magnitude
+            local targetOffset = calculateTextOffset(distance)
+            
+            ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.currentTextOffset + 
+                (targetOffset - ESPModule.PetDisplay.currentTextOffset) * math.min(deltaTime * 8, 1)
+            
+            billboard.StudsOffset = Vector3.new(0, ESPModule.PetDisplay.currentTextOffset, 0)
+        end
+    end)
+
+    ESPModule.PetDisplay.currentBillboard = {
+        Billboard = billboard,
+        Connection = connection
+    }
+end
+
+local function petDisplayLoop()
+    while task_wait(ESPModule.PetDisplay.CHECK_INTERVAL) do
+        if not ESPModule.PetDisplay.Enabled then
+            clearPetBillboards()
+            ESPModule.PetDisplay.lastBestValue = 0
+            ESPModule.PetDisplay.lastBestName = ""
+            ESPModule.PetDisplay.lastBestSalary = ""
+            continue
+        end
+
+        local spawn, name, salary, value = findMostValuablePet()
+
+        if spawn and (value > ESPModule.PetDisplay.lastBestValue or 
+           name ~= ESPModule.PetDisplay.lastBestName or 
+           salary ~= ESPModule.PetDisplay.lastBestSalary) then
+            
+            ESPModule.PetDisplay.lastBestValue = value
+            ESPModule.PetDisplay.lastBestName = name
+            ESPModule.PetDisplay.lastBestSalary = salary
+            createPetBillboard(spawn, name, salary)
+            
+        elseif not spawn and ESPModule.PetDisplay.lastBestValue > 0 then
+            clearPetBillboards()
+            ESPModule.PetDisplay.lastBestValue = 0
+            ESPModule.PetDisplay.lastBestName = ""
+            ESPModule.PetDisplay.lastBestSalary = ""
+        end
+    end
+end
+
+local function TogglePetDisplay(state)
+    ESPModule.PetDisplay.Enabled = state
+    
+    if state then
+        task_spawn(petDisplayLoop)
+    else
+        clearPetBillboards()
+        ESPModule.PetDisplay.lastBestValue = 0
+        ESPModule.PetDisplay.lastBestName = ""
+        ESPModule.PetDisplay.lastBestSalary = ""
+    end
+end
+
+-- ==================== ОБЩИЕ ФУНКЦИИ ====================
+
+function ESPModule.ToggleAll(state)
+    ESPModule.TimerESP.Enabled = state
+    ESPModule.NameTags.Enabled = state
+    ESPModule.WallHack.Enabled = state
+    ESPModule.PetDisplay.Enabled = state
+    
+    if state then
+        InitializeTimerESP()
+        ToggleNameTags(true)
+        ToggleWallHack(true)
+        TogglePetDisplay(true)
+    else
+        for hitbox, timerData in pairs(ESPModule.TimerESP.ActiveTimers) do
+            if timerData then
+                if timerData.Billboard then timerData.Billboard:Destroy() end
+                if timerData.Part then timerData.Part:Destroy() end
+                if timerData.Connection then timerData.Connection:Disconnect() end
+            end
+        end
+        ESPModule.TimerESP.ActiveTimers = {}
+        
+        ToggleNameTags(false)
+        ToggleWallHack(false)
+        clearPetBillboards()
+        ESPModule.PetDisplay.lastBestValue = 0
+        ESPModule.PetDisplay.lastBestName = ""
+        ESPModule.PetDisplay.lastBestSalary = ""
+    end
+end
+
+-- ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+-- Автоматический запуск всех ESP
 task_spawn(function()
     task_wait(2)
-    ESP:Initialize()
-    ESP:Toggle(true)
+    InitializeTimerESP()
+    ToggleNameTags(true)
+    ToggleWallHack(true)
+    TogglePetDisplay(true)
 end)
 
--- UI для управления ESP (опционально)
-local function CreateESPUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "ESPControl"
-    screenGui.Parent = CoreGui
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 300)
-    frame.Position = UDim2.new(0, 10, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.BorderSizePixel = 0
-    frame.Parent = screenGui
-    
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.Text = "ESP Control"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 18
-    title.Parent = frame
-    
-    local function CreateToggle(name, setting, yPosition)
-        local toggleFrame = Instance.new("Frame")
-        toggleFrame.Size = UDim2.new(1, -20, 0, 25)
-        toggleFrame.Position = UDim2.new(0, 10, 0, yPosition)
-        toggleFrame.BackgroundTransparency = 1
-        toggleFrame.Parent = frame
-        
-        local toggle = Instance.new("TextButton")
-        toggle.Size = UDim2.new(0, 20, 0, 20)
-        toggle.Position = UDim2.new(0, 0, 0, 0)
-        toggle.Text = ""
-        toggle.BackgroundColor3 = ESP.Settings[setting] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-        toggle.Parent = toggleFrame
-        
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -25, 1, 0)
-        label.Position = UDim2.new(0, 25, 0, 0)
-        label.Text = name
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.BackgroundTransparency = 1
-        label.Font = Enum.Font.SourceSans
-        label.TextSize = 14
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = toggleFrame
-        
-        toggle.MouseButton1Click:Connect(function()
-            ESP:SetSetting(setting, not ESP.Settings[setting])
-            toggle.BackgroundColor3 = ESP.Settings[setting] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-        end)
-        
-        return toggleFrame
+-- Обновление позиций для TimerESP
+heartbeat:Connect(function()
+    if not ESPModule.TimerESP.Enabled then return end
+
+    for hitbox, timerData in pairs(ESPModule.TimerESP.ActiveTimers) do
+        if hitbox and hitbox.Parent and timerData.Part then
+            local plot = hitbox.Parent
+            local animalPodiums = plot:FindFirstChild('AnimalPodiums')
+            local podiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
+            local newYOffset = CalculateYOffset(podiumCount)
+            
+            if newYOffset ~= timerData.CurrentOffset then
+                timerData.CurrentOffset = newYOffset
+                timerData.Part.CFrame = hitbox.CFrame * CFrame.new(0, newYOffset, 0)
+            end
+        end
     end
-    
-    local yPos = 40
-    CreateToggle("Boxes", "Boxes", yPos); yPos = yPos + 30
-    CreateToggle("Names", "Names", yPos); yPos = yPos + 30
-    CreateToggle("Tracers", "Tracers", yPos); yPos = yPos + 30
-    CreateToggle("Health", "Health", yPos); yPos = yPos + 30
-    CreateToggle("Distance", "Distance", yPos); yPos = yPos + 30
-    CreateToggle("Team Check", "TeamCheck", yPos); yPos = yPos + 30
-    CreateToggle("Team Color", "TeamColor", yPos)
-    
-    -- Кнопка переключения ESP
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(1, -20, 0, 30)
-    toggleButton.Position = UDim2.new(0, 10, 0, 250)
-    toggleButton.Text = "ESP: ON"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-    toggleButton.Font = Enum.Font.SourceSansBold
-    toggleButton.TextSize = 16
-    toggleButton.Parent = frame
-    
-    toggleButton.MouseButton1Click:Connect(function()
-        ESP:Toggle(not ESP.Enabled)
-        toggleButton.Text = ESP.Enabled and "ESP: ON" or "ESP: OFF"
-        toggleButton.BackgroundColor3 = ESP.Enabled and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(100, 0, 0)
-    end)
-end
+end)
 
--- Создаем UI (можно закомментировать если не нужно)
--- CreateESPUI()
+-- Очистка при выходе игрока
+Players.PlayerRemoving:Connect(function(player)
+    if player == localPlayer then
+        clearPetBillboards()
+        ESPModule.PetDisplay.lastBestValue = 0
+        ESPModule.PetDisplay.lastBestName = ""
+        ESPModule.PetDisplay.lastBestSalary = ""
+    else
+        RemovePlayerNameTag(player)
+    end
+end)
 
-return ESP
+return ESPModule
