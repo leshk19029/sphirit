@@ -27,13 +27,13 @@ local ESPModule = {
         Enabled = true,
         MAX_DISTANCE = 500,
         AUTO_COLOR = true,
-        TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0), -- Чёрная обводка
-        TEXT_STROKE_TRANSPARENCY = 0, -- Непрозрачная обводка
+        TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
+        TEXT_STROKE_TRANSPARENCY = 0,
         FONT = Enum.Font.SourceSans,
         CHECK_INTERVAL = 3,
         TEXT_SIZE = 30,
-        TEXT_OFFSET_NEAR = 12, -- Увеличено на 8 (было 4)
-        TEXT_OFFSET_FAR = 20, -- Увеличено на 8 (было 12)
+        TEXT_OFFSET_NEAR = 12,
+        TEXT_OFFSET_FAR = 20,
         currentBillboard = nil,
         lastBestValue = 0,
         lastBestName = '',
@@ -284,7 +284,6 @@ local function CreateNameTag(player)
 
     local connection = heartbeat:Connect(function()
         if player.Character and humanoidRootPart then
-            -- Используем HumanoidRootPart вместо Head для более стабильной позиции
             nameTagPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 5, 0)
         else
             connection:Disconnect()
@@ -312,11 +311,13 @@ local function RemovePlayerNameTag(player)
         local tagData = ESPModule.NameTags.ActiveNameTags[player]
         if tagData.Billboard then tagData.Billboard:Destroy() end
         if tagData.Part then tagData.Part:Destroy() end
-        if tagData.Connection then tagData.Connection:Disconnect() end
+        if tagData.Connection and tagData.Connection.Connected then 
+            tagData.Connection:Disconnect() 
+        end
         ESPModule.NameTags.ActiveNameTags[player] = nil
     end
     
-    if ESPModule.NameTags.Connections[player] then
+    if ESPModule.NameTags.Connections[player] and ESPModule.NameTags.Connections[player].Connected then
         ESPModule.NameTags.Connections[player]:Disconnect()
         ESPModule.NameTags.Connections[player] = nil
     end
@@ -359,7 +360,9 @@ local function ToggleNameTags(state)
             if tagData then
                 if tagData.Billboard then tagData.Billboard:Destroy() end
                 if tagData.Part then tagData.Part:Destroy() end
-                if tagData.Connection then tagData.Connection:Disconnect() end
+                if tagData.Connection and tagData.Connection.Connected then 
+                    tagData.Connection:Disconnect() 
+                end
             end
         end
         ESPModule.NameTags.ActiveNameTags = {}
@@ -406,7 +409,6 @@ local function onPlayerRemoving(player)
         ESPModule.WallHack.Highlights[player]:Destroy()
         ESPModule.WallHack.Highlights[player] = nil
     end
-    -- Удаляем nameTag при выходе игрока
     RemovePlayerNameTag(player)
 end
 
@@ -470,7 +472,7 @@ local function clearPetBillboards()
         if ESPModule.PetDisplay.currentBillboard.Billboard then 
             ESPModule.PetDisplay.currentBillboard.Billboard:Destroy() 
         end
-        if ESPModule.PetDisplay.currentBillboard.Connection then 
+        if ESPModule.PetDisplay.currentBillboard.Connection and ESPModule.PetDisplay.currentBillboard.Connection.Connected then 
             ESPModule.PetDisplay.currentBillboard.Connection:Disconnect() 
         end
     end
@@ -482,7 +484,6 @@ local function findMostValuablePet()
     local bestValue = 0
     local bestSpawn, bestName, bestSalary = nil, '', ''
 
-    -- Поиск Plots в Workspace
     local Plots = Workspace:FindFirstChild('Plots')
     if not Plots then return nil, '', '', 0 end
 
@@ -522,10 +523,8 @@ local function findMostValuablePet()
     return bestSpawn, bestName, bestSalary, bestValue
 end
 
--- Функция для расчета смещения на основе расстояния
 local function calculateTextOffset(distance)
     local normalizedDistance = math_clamp(distance / ESPModule.PetDisplay.MAX_DISTANCE, 0, 1)
-    -- Плавный переход от ближнего к дальнему смещению
     return ESPModule.PetDisplay.TEXT_OFFSET_NEAR + 
            (ESPModule.PetDisplay.TEXT_OFFSET_FAR - ESPModule.PetDisplay.TEXT_OFFSET_NEAR) * normalizedDistance
 end
@@ -538,7 +537,6 @@ local function createPetBillboard(spawn, name, salaryText)
         ESPModule.PetDisplay.currentColor = generateLightColor()
     end
 
-    -- Создаем BillboardGui напрямую на спавне питомца
     local billboard = Instance.new('BillboardGui')
     billboard.Name = 'PetDisplay'
     billboard.Adornee = spawn
@@ -552,8 +550,8 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.Text = name .. '\n' .. formatSalaryText(parseSalaryValue(salaryText))
     textLabel.TextColor3 = ESPModule.PetDisplay.currentColor
-    textLabel.TextStrokeColor3 = ESPModule.PetDisplay.TEXT_STROKE_COLOR -- Чёрная обводка
-    textLabel.TextStrokeTransparency = ESPModule.PetDisplay.TEXT_STROKE_TRANSPARENCY -- Непрозрачная
+    textLabel.TextStrokeColor3 = ESPModule.PetDisplay.TEXT_STROKE_COLOR
+    textLabel.TextStrokeTransparency = ESPModule.PetDisplay.TEXT_STROKE_TRANSPARENCY
     textLabel.BackgroundTransparency = 1
     textLabel.TextSize = ESPModule.PetDisplay.TEXT_SIZE
     textLabel.Font = ESPModule.PetDisplay.FONT
@@ -561,11 +559,6 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.TextYAlignment = Enum.TextYAlignment.Center
     textLabel.TextXAlignment = Enum.TextXAlignment.Center
     textLabel.LineHeight = 0.8
-    textLabel.FontFace = Font.new(
-        'rbxasset://fonts/families/SourceSans.json',
-        ESPModule.PetDisplay.FONT_WEIGHT,
-        Enum.FontStyle.Normal
-    )
     textLabel.Parent = billboard
 
     local lastUpdate = os.clock()
@@ -580,13 +573,11 @@ local function createPetBillboard(spawn, name, salaryText)
             return
         end
 
-        -- Плавное обновление смещения на основе расстояния
         local camera = Workspace.CurrentCamera
         if camera then
             local distance = (spawn.Position - camera.CFrame.Position).Magnitude
             local targetOffset = calculateTextOffset(distance)
             
-            -- Плавное изменение смещения
             ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.currentTextOffset + 
                 (targetOffset - ESPModule.PetDisplay.currentTextOffset) * math.min(deltaTime * 8, 1)
             
@@ -612,7 +603,6 @@ local function petDisplayLoop()
 
         local spawn, name, salary, value = findMostValuablePet()
 
-        -- Обновляем только если значение изменилось
         if spawn and (value > ESPModule.PetDisplay.lastBestValue or 
            name ~= ESPModule.PetDisplay.lastBestName or 
            salary ~= ESPModule.PetDisplay.lastBestSalary) then
@@ -623,7 +613,6 @@ local function petDisplayLoop()
             createPetBillboard(spawn, name, salary)
             
         elseif not spawn and ESPModule.PetDisplay.lastBestValue > 0 then
-            -- Если питомец пропал, очищаем
             clearPetBillboards()
             ESPModule.PetDisplay.lastBestValue = 0
             ESPModule.PetDisplay.lastBestName = ""
@@ -663,7 +652,9 @@ function ESPModule.ToggleAll(state)
             if timerData then
                 if timerData.Billboard then timerData.Billboard:Destroy() end
                 if timerData.Part then timerData.Part:Destroy() end
-                if timerData.Connection then timerData.Connection:Disconnect() end
+                if timerData.Connection and timerData.Connection.Connected then 
+                    timerData.Connection:Disconnect() 
+                end
             end
         end
         ESPModule.TimerESP.ActiveTimers = {}
@@ -672,7 +663,9 @@ function ESPModule.ToggleAll(state)
             if tagData then
                 if tagData.Billboard then tagData.Billboard:Destroy() end
                 if tagData.Part then tagData.Part:Destroy() end
-                if tagData.Connection then tagData.Connection:Disconnect() end
+                if tagData.Connection and tagData.Connection.Connected then 
+                    tagData.Connection:Disconnect() 
+                end
             end
         end
         ESPModule.NameTags.ActiveNameTags = {}
