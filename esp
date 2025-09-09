@@ -27,13 +27,13 @@ local ESPModule = {
         Enabled = true,
         MAX_DISTANCE = 500,
         AUTO_COLOR = true,
-        TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0), -- Чёрная обводка
-        TEXT_STROKE_TRANSPARENCY = 0, -- Непрозрачная обводка
+        TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
+        TEXT_STROKE_TRANSPARENCY = 0,
         FONT = Enum.Font.SourceSans,
         CHECK_INTERVAL = 3,
         TEXT_SIZE = 30,
-        TEXT_OFFSET_NEAR = 12, -- Увеличено на 8 (было 4)
-        TEXT_OFFSET_FAR = 20, -- Увеличено на 8 (было 12)
+        TEXT_OFFSET_NEAR = 12,
+        TEXT_OFFSET_FAR = 20,
         currentBillboard = nil,
         lastBestValue = 0,
         lastBestName = '',
@@ -208,6 +208,52 @@ end
 
 -- ==================== NAME TAGS ====================
 
+local function CreateNameTag(player)
+    if not player or not player.Character then return end
+    
+    local character = player.Character
+    local humanoidRootPart = character:FindFirstChild('HumanoidRootPart')
+    if not humanoidRootPart then return end
+
+    -- Удаляем старый тег если есть
+    if ESPModule.NameTags.ActiveNameTags[player] then
+        ESPModule.NameTags.ActiveNameTags[player]:Destroy()
+    end
+
+    -- Создаем BillboardGui для имени
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'NameTag'
+    billboard.Size = UDim2.new(4, 0, 1, 0)
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 1000
+    billboard.Adornee = humanoidRootPart
+    billboard.Parent = humanoidRootPart
+
+    local textLabel = Instance.new('TextLabel')
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = player.Name
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextStrokeTransparency = 0.3
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextSize = 20
+    textLabel.Font = Enum.Font.SourceSans
+    textLabel.TextScaled = false
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.Parent = billboard
+
+    ESPModule.NameTags.ActiveNameTags[player] = billboard
+end
+
+local function RemovePlayerNameTag(player)
+    if ESPModule.NameTags.ActiveNameTags[player] then
+        ESPModule.NameTags.ActiveNameTags[player]:Destroy()
+        ESPModule.NameTags.ActiveNameTags[player] = nil
+    end
+end
+
 local function InitializeNameTags()
     -- Очищаем все существующие теги
     for player, tagData in pairs(ESPModule.NameTags.ActiveNameTags) do
@@ -227,14 +273,14 @@ local function InitializeNameTags()
             -- Немедленная попытка создания тега
             if player.Character then
                 task.spawn(function()
-                    task.wait(0.5) -- Даем время на полную загрузку персонажа
+                    task.wait(0.5)
                     CreateNameTag(player)
                 end)
             end
             
             -- Подписываемся на будущие персонажи
             ESPModule.NameTags.Connections[player] = player.CharacterAdded:Connect(function(character)
-                task.wait(1) -- Ждем полной загрузки
+                task.wait(1)
                 if ESPModule.NameTags.Enabled then
                     CreateNameTag(player)
                 end
@@ -245,7 +291,7 @@ local function InitializeNameTags()
     -- Подписываемся на новых игроков
     Players.PlayerAdded:Connect(function(player)
         if player ~= localPlayer then
-            task.wait(1) -- Ждем инициализации игрока
+            task.wait(1)
             
             ESPModule.NameTags.Connections[player] = player.CharacterAdded:Connect(function(character)
                 task.wait(1)
@@ -276,16 +322,63 @@ local function ToggleNameTags(state)
         ESPModule.NameTags.ActiveNameTags = {}
     end
 end
+
 -- ==================== WALL HACK ====================
 
+local function createHighlight(character, player)
+    if not character or ESPModule.WallHack.Highlights[player] then return end
+
+    local highlight = Instance.new('Highlight')
+    highlight.Name = 'WallHackHighlight'
+    highlight.FillColor = ESPModule.WallHack.FillColor
+    highlight.FillTransparency = ESPModule.WallHack.FillTransparency
+    highlight.OutlineColor = ESPModule.WallHack.OutlineColor
+    highlight.OutlineTransparency = ESPModule.WallHack.OutlineTransparency
+    highlight.Adornee = character
+    highlight.Parent = character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+    ESPModule.WallHack.Highlights[player] = highlight
+
+    -- Очистка при удалении персонажа
+    character.AncestryChanged:Connect(function()
+        if not character.Parent then
+            if highlight then highlight:Destroy() end
+            ESPModule.WallHack.Highlights[player] = nil
+        end
+    end)
+end
+
+local function onPlayerAdded(player)
+    if player == localPlayer then return end
+    
+    local function handleCharacterAdded(character)
+        task.wait(1)
+        if ESPModule.WallHack.Enabled then
+            createHighlight(character, player)
+        end
+    end
+    
+    player.CharacterAdded:Connect(handleCharacterAdded)
+    
+    if player.Character then
+        handleCharacterAdded(player.Character)
+    end
+end
+
+local function onPlayerRemoving(player)
+    if ESPModule.WallHack.Highlights[player] then
+        ESPModule.WallHack.Highlights[player]:Destroy()
+        ESPModule.WallHack.Highlights[player] = nil
+    end
+end
+
 local function InitializeWallHack()
-    -- Очищаем все существующие highlights
     for player, highlight in pairs(ESPModule.WallHack.Highlights) do
         if highlight then highlight:Destroy() end
     end
     ESPModule.WallHack.Highlights = {}
 
-    -- Создаем highlights для всех текущих игроков
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             task.spawn(function()
@@ -296,40 +389,18 @@ local function InitializeWallHack()
     end
 end
 
-local function onPlayerAdded(player)
-    if player == localPlayer then return end
-    
-    -- Обработчик для нового персонажа
-    local function handleCharacterAdded(character)
-        task.wait(1) -- Ждем полной загрузки модели
-        if ESPModule.WallHack.Enabled then
-            createHighlight(character, player)
-        end
-    end
-    
-    -- Подписываемся на события
-    player.CharacterAdded:Connect(handleCharacterAdded)
-    
-    -- Если персонаж уже существует
-    if player.Character then
-        handleCharacterAdded(player.Character)
-    end
-end
-
 local function ToggleWallHack(state)
     ESPModule.WallHack.Enabled = state
     
     if state then
         InitializeWallHack()
         
-        -- Переподписываемся на всех игроков
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= localPlayer then
                 onPlayerAdded(player)
             end
         end
     else
-        -- Полная очистка
         for player, highlight in pairs(ESPModule.WallHack.Highlights) do
             if highlight then highlight:Destroy() end
         end
@@ -392,7 +463,6 @@ local function findMostValuablePet()
     local bestValue = 0
     local bestSpawn, bestName, bestSalary = nil, '', ''
 
-    -- Поиск Plots в Workspace
     local Plots = Workspace:FindFirstChild('Plots')
     if not Plots then return nil, '', '', 0 end
 
@@ -432,10 +502,8 @@ local function findMostValuablePet()
     return bestSpawn, bestName, bestSalary, bestValue
 end
 
--- Функция для расчета смещения на основе расстояния
 local function calculateTextOffset(distance)
     local normalizedDistance = math_clamp(distance / ESPModule.PetDisplay.MAX_DISTANCE, 0, 1)
-    -- Плавный переход от ближнего к дальнему смещению
     return ESPModule.PetDisplay.TEXT_OFFSET_NEAR + 
            (ESPModule.PetDisplay.TEXT_OFFSET_FAR - ESPModule.PetDisplay.TEXT_OFFSET_NEAR) * normalizedDistance
 end
@@ -448,7 +516,6 @@ local function createPetBillboard(spawn, name, salaryText)
         ESPModule.PetDisplay.currentColor = generateLightColor()
     end
 
-    -- Создаем BillboardGui напрямую на спавне питомца
     local billboard = Instance.new('BillboardGui')
     billboard.Name = 'PetDisplay'
     billboard.Adornee = spawn
@@ -462,8 +529,8 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.Text = name .. '\n' .. formatSalaryText(parseSalaryValue(salaryText))
     textLabel.TextColor3 = ESPModule.PetDisplay.currentColor
-    textLabel.TextStrokeColor3 = ESPModule.PetDisplay.TEXT_STROKE_COLOR -- Чёрная обводка
-    textLabel.TextStrokeTransparency = ESPModule.PetDisplay.TEXT_STROKE_TRANSPARENCY -- Непрозрачная
+    textLabel.TextStrokeColor3 = ESPModule.PetDisplay.TEXT_STROKE_COLOR
+    textLabel.TextStrokeTransparency = ESPModule.PetDisplay.TEXT_STROKE_TRANSPARENCY
     textLabel.BackgroundTransparency = 1
     textLabel.TextSize = ESPModule.PetDisplay.TEXT_SIZE
     textLabel.Font = ESPModule.PetDisplay.FONT
@@ -471,11 +538,6 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.TextYAlignment = Enum.TextYAlignment.Center
     textLabel.TextXAlignment = Enum.TextXAlignment.Center
     textLabel.LineHeight = 0.8
-    textLabel.FontFace = Font.new(
-        'rbxasset://fonts/families/SourceSans.json',
-        ESPModule.PetDisplay.FONT_WEIGHT,
-        Enum.FontStyle.Normal
-    )
     textLabel.Parent = billboard
 
     local lastUpdate = os.clock()
@@ -490,13 +552,11 @@ local function createPetBillboard(spawn, name, salaryText)
             return
         end
 
-        -- Плавное обновление смещения на основе расстояния
         local camera = Workspace.CurrentCamera
         if camera then
             local distance = (spawn.Position - camera.CFrame.Position).Magnitude
             local targetOffset = calculateTextOffset(distance)
             
-            -- Плавное изменение смещения
             ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.currentTextOffset + 
                 (targetOffset - ESPModule.PetDisplay.currentTextOffset) * math.min(deltaTime * 8, 1)
             
@@ -522,7 +582,6 @@ local function petDisplayLoop()
 
         local spawn, name, salary, value = findMostValuablePet()
 
-        -- Обновляем только если значение изменилось
         if spawn and (value > ESPModule.PetDisplay.lastBestValue or 
            name ~= ESPModule.PetDisplay.lastBestName or 
            salary ~= ESPModule.PetDisplay.lastBestSalary) then
@@ -533,7 +592,6 @@ local function petDisplayLoop()
             createPetBillboard(spawn, name, salary)
             
         elseif not spawn and ESPModule.PetDisplay.lastBestValue > 0 then
-            -- Если питомец пропал, очищаем
             clearPetBillboards()
             ESPModule.PetDisplay.lastBestValue = 0
             ESPModule.PetDisplay.lastBestName = ""
@@ -569,7 +627,6 @@ function ESPModule.ToggleAll(state)
         ToggleWallHack(true)
         TogglePetDisplay(true)
     else
-        -- TimerESP очистка
         for hitbox, timerData in pairs(ESPModule.TimerESP.ActiveTimers) do
             if timerData then
                 if timerData.Billboard then timerData.Billboard:Destroy() end
@@ -579,13 +636,8 @@ function ESPModule.ToggleAll(state)
         end
         ESPModule.TimerESP.ActiveTimers = {}
         
-        -- NameTags очистка
         ToggleNameTags(false)
-        
-        -- WallHack очистка
         ToggleWallHack(false)
-        
-        -- PetDisplay очистка
         clearPetBillboards()
         ESPModule.PetDisplay.lastBestValue = 0
         ESPModule.PetDisplay.lastBestName = ""
