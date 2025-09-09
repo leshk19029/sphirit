@@ -210,7 +210,7 @@ end
 -- ==================== NAME TAGS ====================
 
 local function CalculateBackgroundWidth(text)
-    local textSize = TextService:GetTextSize(text, 14, Enum.Font.SourceSansBold, Vector2.new(1000, 22))
+    local textSize = TextService:GetTextSize(text, 14, Enum.Font.GothamBold, Vector2.new(1000, 22))
     return math.max(60, textSize.X + 20)
 end
 
