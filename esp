@@ -41,6 +41,7 @@ local ESPModule = {
         currentColor = Color3.fromRGB(255, 255, 150),
         FONT_WEIGHT = Enum.FontWeight.Bold,
         currentTextOffset = 12,
+        petDisplayLoop = nil,
     },
 }
 
@@ -209,7 +210,7 @@ end
 -- ==================== NAME TAGS ====================
 
 local function CalculateBackgroundWidth(text)
-    local textSize = TextService:GetTextSize(text, 14, Enum.Font.GothamBold, Vector2.new(1000, 22))
+    local textSize = TextService:GetTextSize(text, 14, Enum.Font.SourceSansBold, Vector2.new(1000, 22))
     return math.max(60, textSize.X + 20)
 end
 
@@ -274,7 +275,7 @@ local function CreateNameTag(player)
     nameLabel.Position = UDim2.new(0, 6, 0, 0)
     nameLabel.Text = displayName
     nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.Font = Enum.Font.SourceSansBold
     nameLabel.TextSize = 14
     nameLabel.BackgroundTransparency = 1
     nameLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -559,6 +560,11 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.TextYAlignment = Enum.TextYAlignment.Center
     textLabel.TextXAlignment = Enum.TextXAlignment.Center
     textLabel.LineHeight = 0.8
+    textLabel.FontFace = Font.new(
+        'rbxasset://fonts/families/SourceSans.json',
+        ESPModule.PetDisplay.FONT_WEIGHT,
+        Enum.FontStyle.Normal
+    )
     textLabel.Parent = billboard
 
     local lastUpdate = os.clock()
@@ -592,12 +598,13 @@ local function createPetBillboard(spawn, name, salaryText)
 end
 
 local function petDisplayLoop()
-    while task_wait(ESPModule.PetDisplay.CHECK_INTERVAL) do
+    while true do
         if not ESPModule.PetDisplay.Enabled then
             clearPetBillboards()
             ESPModule.PetDisplay.lastBestValue = 0
             ESPModule.PetDisplay.lastBestName = ""
             ESPModule.PetDisplay.lastBestSalary = ""
+            task_wait(ESPModule.PetDisplay.CHECK_INTERVAL)
             continue
         end
 
@@ -618,6 +625,8 @@ local function petDisplayLoop()
             ESPModule.PetDisplay.lastBestName = ""
             ESPModule.PetDisplay.lastBestSalary = ""
         end
+        
+        task_wait(ESPModule.PetDisplay.CHECK_INTERVAL)
     end
 end
 
@@ -625,7 +634,10 @@ local function TogglePetDisplay(state)
     ESPModule.PetDisplay.Enabled = state
     
     if state then
-        task_spawn(petDisplayLoop)
+        -- Запускаем пет дисплей только если он еще не запущен
+        if not ESPModule.PetDisplay.petDisplayLoop then
+            ESPModule.PetDisplay.petDisplayLoop = task_spawn(petDisplayLoop)
+        end
     else
         clearPetBillboards()
         ESPModule.PetDisplay.lastBestValue = 0
@@ -675,10 +687,7 @@ function ESPModule.ToggleAll(state)
         end
         ESPModule.WallHack.Highlights = {}
         
-        clearPetBillboards()
-        ESPModule.PetDisplay.lastBestValue = 0
-        ESPModule.PetDisplay.lastBestName = ""
-        ESPModule.PetDisplay.lastBestSalary = ""
+        TogglePetDisplay(false)
     end
 end
 
@@ -722,6 +731,9 @@ Players.PlayerRemoving:Connect(function(player)
         ESPModule.PetDisplay.lastBestValue = 0
         ESPModule.PetDisplay.lastBestName = ""
         ESPModule.PetDisplay.lastBestSalary = ""
+        if ESPModule.PetDisplay.petDisplayLoop then
+            ESPModule.PetDisplay.petDisplayLoop = nil
+        end
     else
         RemovePlayerNameTag(player)
     end
