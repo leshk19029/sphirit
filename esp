@@ -275,12 +275,17 @@ local function CreateNameTag(player)
     nameLabel.Position = UDim2.new(0, 6, 0, 0)
     nameLabel.Text = displayName
     nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.Font = Enum.Font.SourceSansBold
-    nameLabel.TextSize = 14
+    nameLabel.Font = ESPModule.PetDisplay.FONT -- Тот же шрифт что и в PetDisplay
+    nameLabel.TextSize = ESPModule.PetDisplay.TEXT_SIZE -- Тот же размер текста
     nameLabel.BackgroundTransparency = 1
     nameLabel.TextXAlignment = Enum.TextXAlignment.Center
     nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     nameLabel.TextStrokeTransparency = 0.3
+    nameLabel.FontFace = Font.new( -- Тот же FontFace что и в PetDisplay
+        'rbxasset://fonts/families/SourceSans.json',
+        ESPModule.PetDisplay.FONT_WEIGHT,
+        Enum.FontStyle.Normal
+    )
     nameLabel.Parent = billboard
 
     local connection = heartbeat:Connect(function()
