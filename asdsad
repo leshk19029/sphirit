@@ -142,8 +142,8 @@ local function findNearestPlayerInRange()
     return nearestPlayer
 end
 
--- Функция для проверки, попали ли мы в игрока
-local function checkIfHitPlayer()
+-- Функция для поиска игрока, в которого мы выстрелили
+local function findShotPlayer()
     local localPlayer = Players.LocalPlayer
     
     for _, player in pairs(Players:GetPlayers()) do
@@ -151,7 +151,7 @@ local function checkIfHitPlayer()
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             
-            -- Проверяем, есть ли PlatformStand (признак попадания)
+            -- Если у игрока PlatformStand включен, значит мы в него выстрелили
             if humanoid and humanoid.PlatformStand then
                 return player
             end
@@ -372,11 +372,11 @@ controlButton.MouseButton1Click:Connect(function()
                 
                 -- Ждем 1 секунду и проверяем попадание
                 wait(1)
-                local hitPlayer = checkIfHitPlayer()
+                local shotPlayer = findShotPlayer()
                 
-                if hitPlayer then
+                if shotPlayer then
                     -- Попали! Меняем персонажа
-                    swapCharacter(hitPlayer)
+                    swapCharacter(shotPlayer)
                     isControlling = true
 
                     -- Меняем вид кнопки
