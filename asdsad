@@ -117,12 +117,11 @@ local function swapCharacter(targetPlayer)
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
 
-    -- Устанавливаем PlatformStand = false для цели и включаем прыжки
+    -- Устанавливаем PlatformStand = false для цели
     if targetPlayer.Character then
         local targetHumanoid = targetPlayer.Character:FindFirstChild('Humanoid')
         if targetHumanoid then
             targetHumanoid.PlatformStand = false
-            targetHumanoid.JumpPower = 50 -- Включаем возможность прыгать
         end
     end
 
