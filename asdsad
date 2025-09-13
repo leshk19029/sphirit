@@ -50,13 +50,10 @@ local function findNearestPlayerInRange()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             local character = player.Character
-            local humanoidRootPart =
-                character:FindFirstChild('HumanoidRootPart')
+            local humanoidRootPart = character:FindFirstChild('HumanoidRootPart')
 
             if humanoidRootPart then
-                local distance = (
-                    localRoot.Position - humanoidRootPart.Position
-                ).Magnitude
+                local distance = (localRoot.Position - humanoidRootPart.Position).Magnitude
                 if distance < shortestDistance and distance <= maxDistance then
                     shortestDistance = distance
                     nearestPlayer = player
@@ -90,7 +87,7 @@ local function applySpeedBoost(character)
     velocityInstance.Name = 'SpeedBoostVelocity'
     velocityInstance.Velocity = Vector3.new(0, 0, 0)
     -- Изменяем MaxForce, чтобы не блокировать прыжки (Y-ось остается свободной)
-    velocityInstance.MaxForce = Vector3.new(10000, 10000, 10000) -- Только X и Z оси
+    velocityInstance.MaxForce = Vector3.new(10000, 0, 10000) -- Только X и Z оси (Y=0 для прыжков)
     velocityInstance.P = 1000
     velocityInstance.Parent = humanoidRootPart
 
@@ -101,14 +98,15 @@ local function applySpeedBoost(character)
     if humanoid then
         humanoid:GetPropertyChangedSignal('MoveDirection'):Connect(function()
             if speedBoostActive and velocityInstance then
-                -- Устанавливаем скорость 25 (изменено с 44)
-                velocityInstance.Velocity = humanoid.MoveDirection * 25
+                -- Устанавливаем скорость 25 (изменено с 44) только по X и Z осям
+                local moveDir = humanoid.MoveDirection
+                velocityInstance.Velocity = Vector3.new(moveDir.X * 25, 0, moveDir.Z * 25)
             end
         end)
     end
 end
 
--- Функция для сменя персонажа
+-- Функция для смены персонажа
 local function swapCharacter(targetPlayer)
     local localPlayer = Players.LocalPlayer
 
@@ -119,11 +117,12 @@ local function swapCharacter(targetPlayer)
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
 
-    -- Устанавливаем PlatformStand = false для цели
+    -- Устанавливаем PlatformStand = false для цели и включаем прыжки
     if targetPlayer.Character then
         local targetHumanoid = targetPlayer.Character:FindFirstChild('Humanoid')
         if targetHumanoid then
             targetHumanoid.PlatformStand = false
+            targetHumanoid.JumpPower = 50 -- Включаем возможность прыгать
         end
     end
 
@@ -293,10 +292,8 @@ local function update(input)
     local newY = startPos.Y.Offset + delta.Y
 
     -- Ограничиваем позицию в пределах экрана
-    newX =
-        math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
-    newY =
-        math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
+    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
+    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
 
     mainFrame.Position = UDim2.new(0, newX, 0, newY)
 end
@@ -367,8 +364,7 @@ startButton.MouseButton1Click:Connect(function()
     local nearestPlayer = findNearestPlayerInRange()
 
     if nearestPlayer and nearestPlayer.Character then
-        local targetRoot =
-            nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
+        local targetRoot = nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
 
         if targetRoot then
             -- Сохраняем цель выстрела
@@ -458,5 +454,3 @@ screenGui.Destroying:Connect(function()
         velocityInstance = nil
     end
 end)
-
-print('Control Player Menu loaded! Click the gear circle to toggle menu.')
