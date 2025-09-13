@@ -345,35 +345,31 @@ local function ToggleNameTags(state)
         end
 
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= localPlayer then
-                -- Создаем соединение для нового персонажа
-                if not ESPModule.NameTags.CharacterConnections[player] then
-                    ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
-                        task_wait(0.5) -- Ждем пока персонаж полностью загрузится
-                        if ESPModule.NameTags.Enabled then
-                            CreateNameTag(player)
-                        end
-                    end)
-                end
-                
-                -- Создаем nametag для текущего персонажа
-                if player.Character then
-                    CreateNameTag(player)
-                end
+            -- Создаем соединение для нового персонажа
+            if not ESPModule.NameTags.CharacterConnections[player] then
+                ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
+                    task_wait(0.5) -- Ждем пока персонаж полностью загрузится
+                    if ESPModule.NameTags.Enabled then
+                        CreateNameTag(player)
+                    end
+                end)
+            end
+            
+            -- Создаем nametag для текущего персонажа
+            if player.Character then
+                CreateNameTag(player)
             end
         end
 
         -- Обработка новых игроков
         Players.PlayerAdded:Connect(function(player)
-            if player ~= localPlayer then
-                if not ESPModule.NameTags.CharacterConnections[player] then
-                    ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
-                        task_wait(0.5)
-                        if ESPModule.NameTags.Enabled then
-                            CreateNameTag(player)
-                        end
-                    end)
-                end
+            if not ESPModule.NameTags.CharacterConnections[player] then
+                ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
+                    task_wait(0.5)
+                    if ESPModule.NameTags.Enabled then
+                        CreateNameTag(player)
+                    end
+                end)
             end
         end)
     else
@@ -584,7 +580,7 @@ local function createPetBillboard(spawn, name, salaryText)
     textLabel.Parent = billboard
 
     local connection = heartbeat:Connect(function()
-        if not spawn or not spawn.Parent or not billboard or not billboard.Parent then
+        if not spawn or not spawn.Parent or not billboard and not billboard.Parent then
             connection:Disconnect()
             if billboard then billboard:Destroy() end
             return
@@ -679,6 +675,19 @@ function ESPModule.ToggleAll(state)
         ESPModule.PetDisplay.lastBestName = ""
         ESPModule.PetDisplay.lastBestSalary = ""
     end
+end
+
+function ESPModule.Unload()
+    -- Очистка всех компонентов
+    ESPModule.ToggleAll(false)
+    
+    -- Дополнительная очистка если нужно
+    for player, _ in pairs(ESPModule.NameTags.Connections) do
+        if ESPModule.NameTags.Connections[player] then
+            ESPModule.NameTags.Connections[player]:Disconnect()
+        end
+    end
+    ESPModule.NameTags.Connections = {}
 end
 
 -- ==================== ИНИЦИАЛИЗАЦИЯ ====================
