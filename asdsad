@@ -1,0 +1,388 @@
+local Players = game:GetService('Players')
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
+local RunService = game:GetService('RunService')
+local UserInputService = game:GetService('UserInputService')
+local TweenService = game:GetService('TweenService')
+
+-- Переменные для хранения состояния
+local originalCharacter = nil
+local originalCameraSettings = {}
+local speedBoostActive = false
+local velocityInstance = nil
+local lastTargetPlayer = nil
+
+-- Функция для изменения WebRopes
+local function modifyWebRopes()
+    -- Получаем все объекты в Workspace
+    local workspaceObjects = workspace:GetDescendants()
+    local modifiedCount = 0
+
+    -- Проходим по всем объектам
+    for _, object in ipairs(workspaceObjects) do
+        -- Проверяем, является ли объект WebRope
+        if object:IsA('RopeConstraint') and object.Name:lower():find('web') then
+            -- Изменяем значение длины на 950
+            object.Length = 950
+            modifiedCount = modifiedCount + 1
+        end
+    end
+
+    return modifiedCount
+end
+
+-- Функция для поиска ближайшего игрока в радиусе 20 studs
+local function findNearestPlayerInRange()
+    local localPlayer = Players.LocalPlayer
+    local localCharacter = localPlayer.Character
+    if not localCharacter then
+        return nil
+    end
+
+    local localRoot = localCharacter:FindFirstChild('HumanoidRootPart')
+    if not localRoot then
+        return nil
+    end
+
+    local nearestPlayer = nil
+    local shortestDistance = math.huge
+    local maxDistance = 20 -- Максимальный радиус
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local character = player.Character
+            local humanoidRootPart =
+                character:FindFirstChild('HumanoidRootPart')
+
+            if humanoidRootPart then
+                local distance = (
+                    localRoot.Position - humanoidRootPart.Position
+                ).Magnitude
+                if distance < shortestDistance and distance <= maxDistance then
+                    shortestDistance = distance
+                    nearestPlayer = player
+                end
+            end
+        end
+    end
+
+    return nearestPlayer
+end
+
+-- Функция для применения скорости 25 (изменено с 44 на 25)
+local function applySpeedBoost(character)
+    if not character then
+        return
+    end
+
+    local humanoidRootPart = character:FindFirstChild('HumanoidRootPart')
+    if not humanoidRootPart then
+        return
+    end
+
+    -- Удаляем старый Velocity если есть
+    if velocityInstance then
+        velocityInstance:Destroy()
+        velocityInstance = nil
+    end
+
+    -- Создаем новый Velocity
+    velocityInstance = Instance.new('BodyVelocity')
+    velocityInstance.Name = 'SpeedBoostVelocity'
+    velocityInstance.Velocity = Vector3.new(0, 0, 0)
+    -- Изменяем MaxForce, чтобы не блокировать прыжки (Y-ось остается свободной)
+    velocityInstance.MaxForce = Vector3.new(10000, 10000, 10000) -- Только X и Z оси
+    velocityInstance.P = 1000
+    velocityInstance.Parent = humanoidRootPart
+
+    speedBoostActive = true
+
+    -- Получаем управление для установки направления
+    local humanoid = character:FindFirstChild('Humanoid')
+    if humanoid then
+        humanoid:GetPropertyChangedSignal('MoveDirection'):Connect(function()
+            if speedBoostActive and velocityInstance then
+                -- Устанавливаем скорость 25 (изменено с 44)
+                velocityInstance.Velocity = humanoid.MoveDirection * 25
+            end
+        end)
+    end
+end
+
+-- Функция для смены персонажа
+local function swapCharacter(targetPlayer)
+    local localPlayer = Players.LocalPlayer
+
+    -- Сохраняем оригинального персонажа и настройки камеры
+    originalCharacter = localPlayer.Character
+    originalCameraSettings = {
+        CameraType = workspace.CurrentCamera.CameraType,
+        CameraSubject = workspace.CurrentCamera.CameraSubject,
+    }
+
+    -- Меняем персонажа
+    localPlayer.Character = targetPlayer.Character
+
+    -- Ждем пока новый персонаж загрузится
+    wait(0.5)
+
+    -- Применяем скорость 25 (изменено с 44)
+    applySpeedBoost(targetPlayer.Character)
+
+    -- Восстанавливаем камеру
+    workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
+    if targetPlayer.Character:FindFirstChild('Humanoid') then
+        workspace.CurrentCamera.CameraSubject = targetPlayer.Character.Humanoid
+    end
+
+    -- Изменяем WebRopes после вселения в персонажа
+    spawn(function()
+        modifyWebRopes()
+    end)
+end
+
+-- Функция для возврата к оригинальному персонажу
+local function returnToOriginalCharacter()
+    if not originalCharacter then
+        return
+    end
+
+    local localPlayer = Players.LocalPlayer
+
+    -- Убираем скорость
+    if velocityInstance then
+        velocityInstance:Destroy()
+        velocityInstance = nil
+    end
+    speedBoostActive = false
+
+    -- Возвращаем оригинального персонажа
+    localPlayer.Character = originalCharacter
+
+    -- Восстанавливаем камеру
+    workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
+    if originalCharacter:FindFirstChild('Humanoid') then
+        workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
+    end
+
+    -- Очищаем переменные
+    originalCharacter = nil
+    originalCameraSettings = {}
+    lastTargetPlayer = nil
+end
+
+-- Создание GUI в стиле второго скрипта
+local player = Players.LocalPlayer
+local mainColor = Color3.fromRGB(25, 25, 25)
+local accentColor = Color3.fromRGB(0, 255, 140)
+local textColor = Color3.fromRGB(255, 255, 255)
+local borderColor = Color3.fromRGB(50, 50, 50)
+
+local screenGui = Instance.new('ScreenGui')
+screenGui.Name = 'ControlPlayerMenu'
+screenGui.Parent = player:WaitForChild('PlayerGui')
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local mainFrame = Instance.new('Frame')
+mainFrame.Size = UDim2.new(0, 250, 0, 150)
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = mainColor
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local mainFrameStroke = Instance.new('UIStroke')
+mainFrameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainFrameStroke.Color = borderColor
+mainFrameStroke.Thickness = 2
+mainFrameStroke.LineJoinMode = Enum.LineJoinMode.Round
+mainFrameStroke.Parent = mainFrame
+
+local mainFrameCorner = Instance.new('UICorner')
+mainFrameCorner.CornerRadius = UDim.new(0, 8)
+mainFrameCorner.Parent = mainFrame
+
+-- Title bar
+local titleBar = Instance.new('Frame')
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleBarCorner = Instance.new('UICorner')
+titleBarCorner.CornerRadius = UDim.new(0, 8)
+titleBarCorner.Parent = titleBar
+
+local title = Instance.new('TextLabel')
+title.Size = UDim2.new(1, -10, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = 'Control Player'
+title.TextColor3 = accentColor
+title.Font = Enum.Font.SciFi
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+local contentFrame = Instance.new('Frame')
+contentFrame.Size = UDim2.new(1, -20, 1, -40)
+contentFrame.Position = UDim2.new(0, 10, 0, 35)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- Функция перетаскивания
+local dragging = false
+local dragStart, startPos
+
+local function update(input)
+    if not dragging then
+        return
+    end
+
+    local delta = input.Position - dragStart
+    local newX = startPos.X.Offset + delta.X
+    local newY = startPos.Y.Offset + delta.Y
+
+    -- Ограничиваем позицию в пределах экрана
+    newX =
+        math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
+    newY =
+        math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
+
+    mainFrame.Position = UDim2.new(0, newX, 0, newY)
+end
+
+-- Перетаскивание за titleBar
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+        update(input)
+    end
+end)
+
+-- Start button
+local startButton = Instance.new('TextButton')
+startButton.Size = UDim2.new(1, 0, 0, 40)
+startButton.Position = UDim2.new(0, 0, 0, 0)
+startButton.BackgroundColor3 = mainColor
+startButton.BorderSizePixel = 0
+startButton.Text = 'START'
+startButton.TextColor3 = textColor
+startButton.Font = Enum.Font.SciFi
+startButton.TextSize = 20
+startButton.Parent = contentFrame
+
+local startButtonCorner = Instance.new('UICorner')
+startButtonCorner.CornerRadius = UDim.new(0, 6)
+startButtonCorner.Parent = startButton
+
+local startButtonStroke = Instance.new('UIStroke')
+startButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+startButtonStroke.Color = borderColor
+startButtonStroke.Thickness = 1.5
+startButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
+startButtonStroke.Parent = startButton
+
+-- Обработчик нажатия кнопки Start
+startButton.MouseButton1Click:Connect(function()
+    local nearestPlayer = findNearestPlayerInRange()
+
+    if nearestPlayer and nearestPlayer.Character then
+        local targetRoot =
+            nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
+
+        if targetRoot then
+            -- Сохраняем цель выстрела
+            lastTargetPlayer = nearestPlayer
+
+            local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
+            Event:FireServer(
+                Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
+                targetRoot
+            )
+
+            -- Меняем персонажа после использования
+            swapCharacter(nearestPlayer)
+
+            -- Изменяем текст кнопки на таймер
+            startButton.Text = '⏳ 10сек...'
+            startButton.TextColor3 = accentColor
+            startButtonStroke.Color = accentColor
+            startButton.Active = false
+
+            -- Запускаем таймер для возврата
+            local timer = 10
+            local countdown = coroutine.create(function()
+                while timer > 0 do
+                    wait(1)
+                    timer = timer - 1
+                    startButton.Text = '⏳ ' .. timer .. 'сек...'
+                end
+
+                -- Возвращаем к оригинальному персонажу
+                returnToOriginalCharacter()
+
+                -- Восстанавливаем кнопку
+                startButton.Text = 'START'
+                startButton.TextColor3 = textColor
+                startButtonStroke.Color = borderColor
+                startButton.Active = true
+            end)
+
+            coroutine.resume(countdown)
+        end
+    end
+end)
+
+-- Управление видимостью главного меню
+local menuEnabled = false
+mainFrame.Visible = false
+
+-- Функция для переключения видимости меню
+local function toggleMenu()
+    menuEnabled = not menuEnabled
+    mainFrame.Visible = menuEnabled
+end
+
+-- Обработчик горячих клавиш
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+
+    if input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.Insert then
+        toggleMenu()
+    end
+end)
+
+-- Очистка при выходе
+player.CharacterRemoving:Connect(function()
+    if velocityInstance then
+        velocityInstance:Destroy()
+        velocityInstance = nil
+    end
+end)
+
+-- Очистка при удалении GUI
+screenGui.Destroying:Connect(function()
+    if velocityInstance then
+        velocityInstance:Destroy()
+        velocityInstance = nil
+    end
+end)
+
+print('Control Player Menu loaded! Press RightShift or Insert to toggle menu.')
