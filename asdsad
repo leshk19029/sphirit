@@ -11,6 +11,7 @@ local isControlling = false
 local countdownCoroutine = nil
 local currentTools = {}
 local originalHumanoidState = nil
+local anchoredParts = {} -- Таблица для хранения заанкоренных частей
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
@@ -66,19 +67,24 @@ local function freezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
-    -- Сохраняем только важные параметры гуманоида
     originalHumanoidState = {
         WalkSpeed = humanoid.WalkSpeed,
         JumpPower = humanoid.JumpPower,
         PlatformStand = humanoid.PlatformStand
     }
     
-    -- Только замораживаем движение через гуманоид
     humanoid.WalkSpeed = 0
     humanoid.JumpPower = 0
     humanoid.PlatformStand = true
     
-    -- НЕ закрепляем части, чтобы не ломать физику!
+    -- Сохраняем ссылки на заанкоренные части
+    anchoredParts = {}
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA('BasePart') then
+            table.insert(anchoredParts, part)
+            part.Anchored = true
+        end
+    end
 end
 
 -- Функция для разморозки оригинального персонажа
@@ -88,21 +94,17 @@ local function unfreezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
-    -- Восстанавливаем параметры гуманоида
     humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
     humanoid.JumpPower = originalHumanoidState.JumpPower
     humanoid.PlatformStand = originalHumanoidState.PlatformStand
     
-    -- Принудительно выключаем PlatformStand для гарантии
-    humanoid.PlatformStand = false
-    
-    -- Принудительно восстанавливаем скорость движения
-    if humanoid.WalkSpeed == 0 then
-        humanoid.WalkSpeed = 16 -- Стандартная скорость
+    -- Убираем Anchored со всех частей, которые были заанкорены
+    for _, part in ipairs(anchoredParts) do
+        if part and part:IsA('BasePart') then
+            part.Anchored = false
+        end
     end
-    if humanoid.JumpPower == 0 then
-        humanoid.JumpPower = 50 -- Стандартная сила прыжка
-    end
+    anchoredParts = {}
     
     originalHumanoidState = nil
 end
@@ -211,46 +213,14 @@ local function returnToOriginalCharacter()
     if not originalCharacter then return end
 
     local localPlayer = Players.LocalPlayer
-    
-    -- Возвращаем оригинального персонажа
     localPlayer.Character = originalCharacter
-    
-    -- Даем время персонажу загрузиться
-    task.wait(0.2)
-    
-    -- Размораживаем оригинального персонажа
     unfreezeOriginalCharacter(originalCharacter)
     
-    -- Восстанавливаем камеру
-    if originalCameraSettings.CameraType then
-        workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
-    end
-    if originalCharacter:FindFirstChild('Humanoid') then
-        workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
-    end
+    workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
+    workspace.CurrentCamera.CameraSubject = originalCharacter:FindFirstChild('Humanoid')
     
-    -- Возвращаем инструменты в руки
     reequipTools()
     
-    -- Принудительно проверяем и восстанавливаем движение
-    if originalCharacter and originalCharacter:FindFirstChild('Humanoid') then
-        local humanoid = originalCharacter.Humanoid
-        -- Гарантируем, что персонаж может двигаться
-        humanoid.PlatformStand = false
-        if humanoid.WalkSpeed == 0 then
-            humanoid.WalkSpeed = 16
-        end
-        if humanoid.JumpPower == 0 then
-            humanoid.JumpPower = 50
-        end
-        
-        -- Принудительно оживляем персонажа если он умер
-        if humanoid.Health <= 0 then
-            humanoid.Health = humanoid.MaxHealth
-        end
-    end
-    
-    -- Очищаем переменные
     originalCharacter = nil
     originalCameraSettings = {}
     isControlling = false
@@ -364,7 +334,7 @@ controlButton.MouseButton1Click:Connect(function()
         
         if not takeWebSlingerInstantly() then
             controlButton.Text = 'CONTROL PLAYER'
-            warn("Web Slinger не найден!")
+            reequipTools()
             return
         end
 
@@ -374,7 +344,6 @@ controlButton.MouseButton1Click:Connect(function()
         if not targetPlayer then
             controlButton.Text = 'CONTROL PLAYER'
             reequipTools()
-            warn("Цель не найдена!")
             return
         end
 
@@ -407,7 +376,6 @@ controlButton.MouseButton1Click:Connect(function()
         else
             controlButton.Text = 'CONTROL PLAYER'
             reequipTools()
-            warn("Ошибка вселения!")
         end
     end
 end)
