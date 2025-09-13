@@ -66,21 +66,19 @@ local function freezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
+    -- Сохраняем только важные параметры гуманоида
     originalHumanoidState = {
         WalkSpeed = humanoid.WalkSpeed,
         JumpPower = humanoid.JumpPower,
         PlatformStand = humanoid.PlatformStand
     }
     
+    -- Только замораживаем движение через гуманоид
     humanoid.WalkSpeed = 0
     humanoid.JumpPower = 0
     humanoid.PlatformStand = true
     
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA('BasePart') then
-            part.Anchored = true
-        end
-    end
+    -- НЕ закрепляем части, чтобы не ломать физику!
 end
 
 -- Функция для разморозки оригинального персонажа
@@ -90,14 +88,20 @@ local function unfreezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
+    -- Восстанавливаем параметры гуманоида
     humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
     humanoid.JumpPower = originalHumanoidState.JumpPower
     humanoid.PlatformStand = originalHumanoidState.PlatformStand
     
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA('BasePart') then
-            part.Anchored = false
-        end
+    -- Принудительно выключаем PlatformStand для гарантии
+    humanoid.PlatformStand = false
+    
+    -- Принудительно восстанавливаем скорость движения
+    if humanoid.WalkSpeed == 0 then
+        humanoid.WalkSpeed = 16 -- Стандартная скорость
+    end
+    if humanoid.JumpPower == 0 then
+        humanoid.JumpPower = 50 -- Стандартная сила прыжка
     end
     
     originalHumanoidState = nil
@@ -207,14 +211,46 @@ local function returnToOriginalCharacter()
     if not originalCharacter then return end
 
     local localPlayer = Players.LocalPlayer
+    
+    -- Возвращаем оригинального персонажа
     localPlayer.Character = originalCharacter
+    
+    -- Даем время персонажу загрузиться
+    task.wait(0.2)
+    
+    -- Размораживаем оригинального персонажа
     unfreezeOriginalCharacter(originalCharacter)
     
-    workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
-    workspace.CurrentCamera.CameraSubject = originalCharacter:FindFirstChild('Humanoid')
+    -- Восстанавливаем камеру
+    if originalCameraSettings.CameraType then
+        workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
+    end
+    if originalCharacter:FindFirstChild('Humanoid') then
+        workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
+    end
     
+    -- Возвращаем инструменты в руки
     reequipTools()
     
+    -- Принудительно проверяем и восстанавливаем движение
+    if originalCharacter and originalCharacter:FindFirstChild('Humanoid') then
+        local humanoid = originalCharacter.Humanoid
+        -- Гарантируем, что персонаж может двигаться
+        humanoid.PlatformStand = false
+        if humanoid.WalkSpeed == 0 then
+            humanoid.WalkSpeed = 16
+        end
+        if humanoid.JumpPower == 0 then
+            humanoid.JumpPower = 50
+        end
+        
+        -- Принудительно оживляем персонажа если он умер
+        if humanoid.Health <= 0 then
+            humanoid.Health = humanoid.MaxHealth
+        end
+    end
+    
+    -- Очищаем переменные
     originalCharacter = nil
     originalCameraSettings = {}
     isControlling = false
