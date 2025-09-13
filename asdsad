@@ -7,19 +7,16 @@ local TweenService = game:GetService('TweenService')
 -- Переменные для хранения состояния
 local originalCharacter = nil
 local originalCameraSettings = {}
-local lastTargetPlayer = nil
+local isControlling = false
+local countdownCoroutine = nil
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
-    -- Получаем все объекты в Workspace
     local workspaceObjects = workspace:GetDescendants()
     local modifiedCount = 0
 
-    -- Проходим по всем объектам
     for _, object in ipairs(workspaceObjects) do
-        -- Проверяем, является ли объект WebRope
         if object:IsA('RopeConstraint') and object.Name:lower():find('web') then
-            -- Изменяем значение длины на 950
             object.Length = 950
             modifiedCount = modifiedCount + 1
         end
@@ -43,7 +40,7 @@ local function findNearestPlayerInRange()
 
     local nearestPlayer = nil
     local shortestDistance = math.huge
-    local maxDistance = 20 -- Максимальный радиус
+    local maxDistance = 20
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
@@ -67,13 +64,11 @@ end
 local function findShotPlayer()
     local localPlayer = Players.LocalPlayer
     
-    -- Ищем всех игроков кроме себя
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             
-            -- Если у игрока PlatformStand включен, значит мы в него выстрелили
             if humanoid and humanoid.PlatformStand then
                 return player
             end
@@ -89,50 +84,8 @@ local function disablePlatformStand(targetPlayer)
         local humanoid = targetPlayer.Character:FindFirstChild('Humanoid')
         if humanoid then
             humanoid.PlatformStand = false
-            print("PlatformStand отключен для игрока:", targetPlayer.Name)
         end
     end
-end
-
--- Функция для проверки и взятия Web Slinger в руки
-local function ensureWebSlingerInHands()
-    local localPlayer = Players.LocalPlayer
-    local character = localPlayer.Character
-    if not character then
-        return false
-    end
-
-    local backpack = localPlayer:FindFirstChild('Backpack')
-    if not backpack then
-        return false
-    end
-
-    -- Ищем Web Slinger в инвентаре
-    local webSlinger = nil
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item.Name:lower():find('web') and item.Name:lower():find('slinger') then
-            webSlinger = item
-            break
-        end
-    end
-
-    -- Если не нашли, ищем в других местах
-    if not webSlinger then
-        for _, item in ipairs(character:GetChildren()) do
-            if item:IsA('Tool') and item.Name:lower():find('web') and item.Name:lower():find('slinger') then
-                webSlinger = item
-                break
-            end
-        end
-    end
-
-    -- Если нашли Web Slinger, берем его в руки
-    if webSlinger then
-        webSlinger.Parent = character
-        return true
-    end
-
-    return false
 end
 
 -- Функция для смены персонажа
@@ -187,7 +140,15 @@ local function returnToOriginalCharacter()
     -- Очищаем переменные
     originalCharacter = nil
     originalCameraSettings = {}
-    lastTargetPlayer = nil
+    isControlling = false
+end
+
+-- Функция для остановки таймера
+local function stopCountdown()
+    if countdownCoroutine then
+        coroutine.close(countdownCoroutine)
+        countdownCoroutine = nil
+    end
 end
 
 -- Создание GUI
@@ -203,90 +164,41 @@ screenGui.Parent = player:WaitForChild('PlayerGui')
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основное меню
-local mainFrame = Instance.new('Frame')
-mainFrame.Size = UDim2.new(0, 200, 0, 120)
-mainFrame.Position = UDim2.new(0, 10, 0, 10)
-mainFrame.BackgroundColor3 = mainColor
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = screenGui
+-- Основная кнопка
+local controlButton = Instance.new('TextButton')
+controlButton.Size = UDim2.new(0, 150, 0, 40)
+controlButton.Position = UDim2.new(0, 10, 0, 10)
+controlButton.BackgroundColor3 = mainColor
+controlButton.BorderSizePixel = 0
+controlButton.Text = 'Control Player'
+controlButton.TextColor3 = textColor
+controlButton.Font = Enum.Font.Code
+controlButton.TextSize = 14
+controlButton.Parent = screenGui
 
-local mainFrameStroke = Instance.new('UIStroke')
-mainFrameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-mainFrameStroke.Color = borderColor
-mainFrameStroke.Thickness = 2
-mainFrameStroke.LineJoinMode = Enum.LineJoinMode.Round
-mainFrameStroke.Parent = mainFrame
+local controlButtonCorner = Instance.new('UICorner')
+controlButtonCorner.CornerRadius = UDim.new(0, 6)
+controlButtonCorner.Parent = controlButton
 
-local mainFrameCorner = Instance.new('UICorner')
-mainFrameCorner.CornerRadius = UDim.new(0, 8)
-mainFrameCorner.Parent = mainFrame
+local controlButtonStroke = Instance.new('UIStroke')
+controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+controlButtonStroke.Color = borderColor
+controlButtonStroke.Thickness = 2
+controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
+controlButtonStroke.Parent = controlButton
 
--- Title bar
-local titleBar = Instance.new('Frame')
-titleBar.Size = UDim2.new(1, 0, 0, 25)
-titleBar.Position = UDim2.new(0, 0, 0, 0)
-titleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
-
-local titleBarCorner = Instance.new('UICorner')
-titleBarCorner.CornerRadius = UDim.new(0, 8)
-titleBarCorner.Parent = titleBar
-
-local title = Instance.new('TextLabel')
-title.Size = UDim2.new(1, -10, 1, 0)
-title.Position = UDim2.new(0, 10, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = 'Control Player'
-title.TextColor3 = accentColor
-title.Font = Enum.Font.Code
-title.TextSize = 14
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = titleBar
-
-local contentFrame = Instance.new('Frame')
-contentFrame.Size = UDim2.new(1, -20, 1, -35)
-contentFrame.Position = UDim2.new(0, 10, 0, 30)
-contentFrame.BackgroundTransparency = 1
-contentFrame.Parent = mainFrame
-
--- Кружок для открытия/закрытия меню
-local toggleCircle = Instance.new('TextButton')
-toggleCircle.Size = UDim2.new(0, 35, 0, 35)
-toggleCircle.Position = UDim2.new(1, -45, 0, 10)
-toggleCircle.AnchorPoint = Vector2.new(1, 0)
-toggleCircle.BackgroundColor3 = mainColor
-toggleCircle.Text = "⚙️"
-toggleCircle.TextColor3 = accentColor
-toggleCircle.Font = Enum.Font.Code
-toggleCircle.TextSize = 16
-toggleCircle.Parent = screenGui
-
-local toggleCircleCorner = Instance.new('UICorner')
-toggleCircleCorner.CornerRadius = UDim.new(1, 0)
-toggleCircleCorner.Parent = toggleCircle
-
-local toggleCircleStroke = Instance.new('UIStroke')
-toggleCircleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-toggleCircleStroke.Color = accentColor
-toggleCircleStroke.Thickness = 2
-toggleCircleStroke.LineJoinMode = Enum.LineJoinMode.Round
-toggleCircleStroke.Parent = toggleCircle
-
--- Эффект при наведении на кружок
-toggleCircle.MouseEnter:Connect(function()
+-- Эффект при наведении на кнопку
+controlButton.MouseEnter:Connect(function()
     TweenService:Create(
-        toggleCircle,
+        controlButton,
         TweenInfo.new(0.2),
         {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
     ):Play()
 end)
 
-toggleCircle.MouseLeave:Connect(function()
+controlButton.MouseLeave:Connect(function()
     TweenService:Create(
-        toggleCircle,
+        controlButton,
         TweenInfo.new(0.2),
         {BackgroundColor3 = mainColor}
     ):Play()
@@ -305,21 +217,21 @@ local function update(input)
     local newX = startPos.X.Offset + delta.X
     local newY = startPos.Y.Offset + delta.Y
 
-    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
-    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
+    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
+    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
 
-    mainFrame.Position = UDim2.new(0, newX, 0, newY)
+    controlButton.Position = UDim2.new(0, newX, 0, newY)
 end
 
-titleBar.InputBegan:Connect(function(input)
+controlButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
-        startPos = mainFrame.Position
+        startPos = controlButton.Position
     end
 end)
 
-titleBar.InputEnded:Connect(function(input)
+controlButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = false
     end
@@ -331,143 +243,83 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Start button
-local startButton = Instance.new('TextButton')
-startButton.Size = UDim2.new(1, 0, 0, 35)
-startButton.Position = UDim2.new(0, 0, 0, 0)
-startButton.BackgroundColor3 = mainColor
-startButton.BorderSizePixel = 0
-startButton.Text = 'START'
-startButton.TextColor3 = textColor
-startButton.Font = Enum.Font.Code
-startButton.TextSize = 16
-startButton.Parent = contentFrame
+-- Обработчик нажатия кнопки
+controlButton.MouseButton1Click:Connect(function()
+    if isControlling then
+        -- Если уже контролируем, отменяем и возвращаемся
+        stopCountdown()
+        returnToOriginalCharacter()
+        controlButton.Text = 'Control Player'
+        controlButton.TextColor3 = textColor
+        controlButtonStroke.Color = borderColor
+    else
+        -- Если не контролируем, пытаемся выстрелить
+        local nearestPlayer = findNearestPlayerInRange()
 
-local startButtonCorner = Instance.new('UICorner')
-startButtonCorner.CornerRadius = UDim.new(0, 6)
-startButtonCorner.Parent = startButton
+        if nearestPlayer and nearestPlayer.Character then
+            local targetRoot = nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
 
-local startButtonStroke = Instance.new('UIStroke')
-startButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-startButtonStroke.Color = borderColor
-startButtonStroke.Thickness = 1.5
-startButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
-startButtonStroke.Parent = startButton
+            if targetRoot then
+                local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
+                Event:FireServer(
+                    Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
+                    targetRoot
+                )
 
-startButton.MouseEnter:Connect(function()
-    TweenService:Create(
-        startButton,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-    ):Play()
-end)
+                -- Ждем немного после выстрела
+                wait(0.5)
+                
+                -- Ищем игрока, в которого мы выстрелили
+                local shotPlayer = findShotPlayer()
+                
+                if shotPlayer then
+                    -- Меняем персонажа
+                    swapCharacter(shotPlayer)
+                    isControlling = true
 
-startButton.MouseLeave:Connect(function()
-    TweenService:Create(
-        startButton,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = mainColor}
-    ):Play()
-end)
+                    -- Меняем вид кнопки
+                    controlButton.Text = 'CANCEL (9s)'
+                    controlButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    controlButtonStroke.Color = Color3.fromRGB(255, 100, 100)
 
--- Обработчик нажатия кнопки Start
-startButton.MouseButton1Click:Connect(function()
-    -- Проверяем и берем Web Slinger в руки
-    if not ensureWebSlingerInHands() then
-        warn("Web Slinger не найден в инвентаре!")
-        return
-    end
+                    -- Запускаем таймер для возврата
+                    local timer = 9
+                    countdownCoroutine = coroutine.create(function()
+                        while timer > 0 and isControlling do
+                            wait(1)
+                            timer = timer - 1
+                            controlButton.Text = 'CANCEL (' .. timer .. 's)'
+                        end
 
-    local nearestPlayer = findNearestPlayerInRange()
+                        if isControlling then
+                            -- Автоматический возврат по истечении времени
+                            returnToOriginalCharacter()
+                            controlButton.Text = 'Control Player'
+                            controlButton.TextColor3 = textColor
+                            controlButtonStroke.Color = borderColor
+                        end
+                    end)
 
-    if nearestPlayer and nearestPlayer.Character then
-        local targetRoot = nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
-
-        if targetRoot then
-            -- Сохраняем цель выстрела
-            lastTargetPlayer = nearestPlayer
-
-            local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
-            Event:FireServer(
-                Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
-                targetRoot
-            )
-
-            -- Ждем немного после выстрела
-            wait(0.5)
-            
-            -- Ищем игрока, в которого мы выстрелили (у которого включен PlatformStand)
-            local shotPlayer = findShotPlayer()
-            
-            if shotPlayer then
-                -- Меняем персонажа после использования
-                swapCharacter(shotPlayer)
-
-                -- Изменяем текст кнопки на таймер (9 секунд вместо 10)
-                startButton.Text = '⏳ 9s...'
-                startButton.TextColor3 = accentColor
-                startButtonStroke.Color = accentColor
-                startButton.Active = false
-
-                -- Запускаем таймер для возврата (9 секунд вместо 10)
-                local timer = 9
-                local countdown = coroutine.create(function()
-                    while timer > 0 do
-                        wait(1)
-                        timer = timer - 1
-                        startButton.Text = '⏳ ' .. timer .. 's...'
-                    end
-
-                    -- Возвращаем к оригинальному персонажу
-                    returnToOriginalCharacter()
-
-                    -- Восстанавливаем кнопку
-                    startButton.Text = 'START'
-                    startButton.TextColor3 = textColor
-                    startButtonStroke.Color = borderColor
-                    startButton.Active = true
-                end)
-
-                coroutine.resume(countdown)
-            else
-                warn("Не удалось найти игрока, в которого выстрелили")
+                    coroutine.resume(countdownCoroutine)
+                else
+                    warn("Не удалось найти игрока, в которого выстрелили")
+                end
             end
+        else
+            warn("Ближайший игрок не найден или вне радиуса")
         end
     end
 end)
 
--- Управление видимостью главного меню
-local menuEnabled = false
-mainFrame.Visible = false
-
-local function toggleMenu()
-    menuEnabled = not menuEnabled
-    mainFrame.Visible = menuEnabled
-    
-    if menuEnabled then
-        TweenService:Create(
-            toggleCircle,
-            TweenInfo.new(0.3),
-            {BackgroundColor3 = accentColor, TextColor3 = mainColor}
-        ):Play()
-    else
-        TweenService:Create(
-            toggleCircle,
-            TweenInfo.new(0.3),
-            {BackgroundColor3 = mainColor, TextColor3 = accentColor}
-        ):Play()
-    end
-end
-
-toggleCircle.MouseButton1Click:Connect(function()
-    toggleMenu()
-end)
-
 -- Очистка при выходе
 player.CharacterRemoving:Connect(function()
-    -- Очистка не требуется
+    if isControlling then
+        returnToOriginalCharacter()
+    end
 end)
 
 screenGui.Destroying:Connect(function()
-    -- Очистка не требуется
+    if isControlling then
+        returnToOriginalCharacter()
+    end
 end)
