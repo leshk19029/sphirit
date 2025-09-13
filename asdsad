@@ -119,6 +119,14 @@ local function swapCharacter(targetPlayer)
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
 
+    -- Устанавливаем PlatformStand = false для цели
+    if targetPlayer.Character then
+        local targetHumanoid = targetPlayer.Character:FindFirstChild('Humanoid')
+        if targetHumanoid then
+            targetHumanoid.PlatformStand = false
+        end
+    end
+
     -- Меняем персонажа
     localPlayer.Character = targetPlayer.Character
 
