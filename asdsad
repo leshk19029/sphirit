@@ -7,17 +7,19 @@ local TweenService = game:GetService('TweenService')
 -- Переменные для хранения состояния
 local originalCharacter = nil
 local originalCameraSettings = {}
-local originalWalkSpeed = 16
-local speedBoostActive = false
 local lastTargetPlayer = nil
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
+    -- Получаем все объекты в Workspace
     local workspaceObjects = workspace:GetDescendants()
     local modifiedCount = 0
 
+    -- Проходим по всем объектам
     for _, object in ipairs(workspaceObjects) do
+        -- Проверяем, является ли объект WebRope
         if object:IsA('RopeConstraint') and object.Name:lower():find('web') then
+            -- Изменяем значение длины на 950
             object.Length = 950
             modifiedCount = modifiedCount + 1
         end
@@ -41,7 +43,7 @@ local function findNearestPlayerInRange()
 
     local nearestPlayer = nil
     local shortestDistance = math.huge
-    local maxDistance = 20
+    local maxDistance = 20 -- Максимальный радиус
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
@@ -65,11 +67,13 @@ end
 local function findShotPlayer()
     local localPlayer = Players.LocalPlayer
     
+    -- Ищем всех игроков кроме себя
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             
+            -- Если у игрока PlatformStand включен, значит мы в него выстрелили
             if humanoid and humanoid.PlatformStand then
                 return player
             end
@@ -79,58 +83,22 @@ local function findShotPlayer()
     return nil
 end
 
--- Функция для отключения PlatformStand у цели
-local function disablePlatformStand(targetPlayer)
-    if targetPlayer and targetPlayer.Character then
-        local humanoid = targetPlayer.Character:FindFirstChild('Humanoid')
-        if humanoid then
-            humanoid.PlatformStand = false
-        end
-    end
-end
-
--- Функция для применения скорости 25 через WalkSpeed
-local function applySpeedBoost(character)
-    if not character then
-        return
-    end
-
-    local humanoid = character:FindFirstChild('Humanoid')
-    if not humanoid then
-        return
-    end
-
-    humanoid.WalkSpeed = 25
-    speedBoostActive = true
-end
-
 -- Функция для смены персонажа
 local function swapCharacter(targetPlayer)
     local localPlayer = Players.LocalPlayer
 
-    -- Сохраняем оригинального персонажа и настройки
+    -- Сохраняем оригинального персонажа и настройки камеры
     originalCharacter = localPlayer.Character
     originalCameraSettings = {
         CameraType = workspace.CurrentCamera.CameraType,
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
-    
-    -- Сохраняем оригинальную скорость
-    if originalCharacter and originalCharacter:FindFirstChild('Humanoid') then
-        originalWalkSpeed = originalCharacter.Humanoid.WalkSpeed
-    end
-
-    -- Отключаем PlatformStand у цели
-    disablePlatformStand(targetPlayer)
 
     -- Меняем персонажа
     localPlayer.Character = targetPlayer.Character
 
     -- Ждем пока новый персонаж загрузится
     wait(0.5)
-
-    -- Применяем скорость 25
-    applySpeedBoost(targetPlayer.Character)
 
     -- Восстанавливаем камеру
     workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
@@ -140,7 +108,6 @@ local function swapCharacter(targetPlayer)
 
     -- Изменяем WebRopes после вселения в персонажа
     spawn(function()
-        wait(1) -- Даем время на загрузку
         modifyWebRopes()
     end)
 end
@@ -153,24 +120,8 @@ local function returnToOriginalCharacter()
 
     local localPlayer = Players.LocalPlayer
 
-    -- Восстанавливаем PlatformStand у цели, если она еще существует
-    if lastTargetPlayer and lastTargetPlayer.Character then
-        disablePlatformStand(lastTargetPlayer)
-    end
-
-    -- Ждем синхронизации
-    wait(0.1)
-
     -- Возвращаем оригинального персонажа
     localPlayer.Character = originalCharacter
-
-    -- Дополнительная пауза для синхронизации
-    wait(0.1)
-
-    -- Восстанавливаем оригинальную скорость
-    if originalCharacter and originalCharacter:FindFirstChild('Humanoid') then
-        originalCharacter.Humanoid.WalkSpeed = originalWalkSpeed
-    end
 
     -- Восстанавливаем камеру
     workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
@@ -181,8 +132,6 @@ local function returnToOriginalCharacter()
     -- Очищаем переменные
     originalCharacter = nil
     originalCameraSettings = {}
-    originalWalkSpeed = 16
-    speedBoostActive = false
     lastTargetPlayer = nil
 end
 
@@ -385,7 +334,7 @@ startButton.MouseButton1Click:Connect(function()
             -- Ждем немного после выстрела
             wait(0.5)
             
-            -- Ищем игрока, в которого мы выстрелили
+            -- Ищем игрока, в которого мы выстрелили (у которого включен PlatformStand)
             local shotPlayer = findShotPlayer()
             
             if shotPlayer then
@@ -420,15 +369,8 @@ startButton.MouseButton1Click:Connect(function()
                 coroutine.resume(countdown)
             else
                 warn("Не удалось найти игрока, в которого выстрелили")
-                -- Сбрасываем кнопку если не нашли цель
-                startButton.Text = 'START'
-                startButton.TextColor3 = textColor
-                startButtonStroke.Color = borderColor
-                startButton.Active = true
             end
         end
-    else
-        warn("Нет ближайшего игрока в радиусе 20 studs")
     end
 end)
 
@@ -458,27 +400,3 @@ end
 toggleCircle.MouseButton1Click:Connect(function()
     toggleMenu()
 end)
-
--- Автоматическое восстановление при случайном выходе из игры
-game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function(character)
-    if originalCharacter then
-        -- Если у нас был сохранен оригинальный персонаж, но мы заспавнились заново
-        wait(2) -- Даем время на полную загрузку персонажа
-        returnToOriginalCharacter()
-    end
-end)
-
--- Очистка при выходе
-player.CharacterRemoving:Connect(function()
-    if originalCharacter then
-        returnToOriginalCharacter()
-    end
-end)
-
-screenGui.Destroying:Connect(function()
-    if originalCharacter then
-        returnToOriginalCharacter()
-    end
-end)
-
-print("Control Player GUI загружен успешно!")
