@@ -183,6 +183,7 @@ screenGui.Parent = player:WaitForChild('PlayerGui')
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+-- Основное меню
 local mainFrame = Instance.new('Frame')
 mainFrame.Size = UDim2.new(0, 250, 0, 150)
 mainFrame.Position = UDim2.new(0, 10, 0, 10)
@@ -230,6 +231,45 @@ contentFrame.Size = UDim2.new(1, -20, 1, -40)
 contentFrame.Position = UDim2.new(0, 10, 0, 35)
 contentFrame.BackgroundTransparency = 1
 contentFrame.Parent = mainFrame
+
+-- Кружок для открытия/закрытия меню
+local toggleCircle = Instance.new('TextButton')
+toggleCircle.Size = UDim2.new(0, 40, 0, 40)
+toggleCircle.Position = UDim2.new(1, -50, 0, 10) -- Правый верхний угол
+toggleCircle.AnchorPoint = Vector2.new(1, 0)
+toggleCircle.BackgroundColor3 = mainColor
+toggleCircle.Text = "⚙️"
+toggleCircle.TextColor3 = accentColor
+toggleCircle.TextSize = 20
+toggleCircle.Parent = screenGui
+
+local toggleCircleCorner = Instance.new('UICorner')
+toggleCircleCorner.CornerRadius = UDim.new(1, 0) -- Полностью круглый
+toggleCircleCorner.Parent = toggleCircle
+
+local toggleCircleStroke = Instance.new('UIStroke')
+toggleCircleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+toggleCircleStroke.Color = accentColor
+toggleCircleStroke.Thickness = 2
+toggleCircleStroke.LineJoinMode = Enum.LineJoinMode.Round
+toggleCircleStroke.Parent = toggleCircle
+
+-- Эффект при наведении на кружок
+toggleCircle.MouseEnter:Connect(function()
+    TweenService:Create(
+        toggleCircle,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+    ):Play()
+end)
+
+toggleCircle.MouseLeave:Connect(function()
+    TweenService:Create(
+        toggleCircle,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = mainColor}
+    ):Play()
+end)
 
 -- Функция перетаскивания
 local dragging = false
@@ -297,6 +337,23 @@ startButtonStroke.Thickness = 1.5
 startButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
 startButtonStroke.Parent = startButton
 
+-- Эффект при наведении на кнопку START
+startButton.MouseEnter:Connect(function()
+    TweenService:Create(
+        startButton,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+    ):Play()
+end)
+
+startButton.MouseLeave:Connect(function()
+    TweenService:Create(
+        startButton,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = mainColor}
+    ):Play()
+end)
+
 -- Обработчик нажатия кнопки Start
 startButton.MouseButton1Click:Connect(function()
     local nearestPlayer = findNearestPlayerInRange()
@@ -356,17 +413,26 @@ mainFrame.Visible = false
 local function toggleMenu()
     menuEnabled = not menuEnabled
     mainFrame.Visible = menuEnabled
+    
+    -- Анимация появления/исчезновения
+    if menuEnabled then
+        TweenService:Create(
+            toggleCircle,
+            TweenInfo.new(0.3),
+            {BackgroundColor3 = accentColor, TextColor3 = mainColor}
+        ):Play()
+    else
+        TweenService:Create(
+            toggleCircle,
+            TweenInfo.new(0.3),
+            {BackgroundColor3 = mainColor, TextColor3 = accentColor}
+        ):Play()
+    end
 end
 
--- Обработчик горячих клавиш
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then
-        return
-    end
-
-    if input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.Insert then
-        toggleMenu()
-    end
+-- Обработчик клика по кружку
+toggleCircle.MouseButton1Click:Connect(function()
+    toggleMenu()
 end)
 
 -- Очистка при выходе
@@ -385,4 +451,4 @@ screenGui.Destroying:Connect(function()
     end
 end)
 
-print('Control Player Menu loaded! Press RightShift or Insert to toggle menu.')
+print('Control Player Menu loaded! Click the gear circle to toggle menu.')
