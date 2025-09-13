@@ -10,48 +10,6 @@ local originalCameraSettings = {}
 local isControlling = false
 local countdownCoroutine = nil
 local currentTools = {} -- Для хранения текущих инструментов
-local originalHumanoidState = nil -- Для хранения состояния Humanoid
-
--- Функция для остановки движения персонажа
-local function freezeCharacter(character)
-    if not character then return end
-    
-    local humanoid = character:FindFirstChild('Humanoid')
-    if not humanoid then return end
-    
-    -- Сохраняем текущее состояние
-    originalHumanoidState = {
-        WalkSpeed = humanoid.WalkSpeed,
-        JumpPower = humanoid.JumpPower,
-        AutoRotate = humanoid.AutoRotate
-    }
-    
-    -- Останавливаем персонажа
-    humanoid.WalkSpeed = 0
-    humanoid.JumpPower = 0
-    humanoid.AutoRotate = false
-    
-    -- Останавливаем все движения
-    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-end
-
--- Функция для разблокировки движения персонажа
-local function unfreezeCharacter(character)
-    if not character or not originalHumanoidState then return end
-    
-    local humanoid = character:FindFirstChild('Humanoid')
-    if not humanoid then return end
-    
-    -- Восстанавливаем оригинальные настройки
-    humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
-    humanoid.JumpPower = originalHumanoidState.JumpPower
-    humanoid.AutoRotate = originalHumanoidState.AutoRotate
-    
-    -- Возвращаем в нормальное состояние
-    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-    
-    originalHumanoidState = nil
-end
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
@@ -262,9 +220,6 @@ local function returnToOriginalCharacter()
         workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
     end
 
-    -- Разблокируем движение оригинального персонажа
-    unfreezeCharacter(originalCharacter)
-
     -- Возвращаем инструменты в руки
     reequipTools()
 
@@ -384,16 +339,11 @@ controlButton.MouseButton1Click:Connect(function()
         controlButton.TextColor3 = textColor
         controlButtonStroke.Color = borderColor
     else
-        -- Останавливаем движение текущего персонажа
-        freezeCharacter(player.Character)
-        
         -- Показываем, что идет поиск Web Slinger
         controlButton.Text = 'Taking Web...'
         
         -- Проверяем и берем Web Slinger в руки (убирая другие инструменты)
         if not ensureWebSlingerInHands() then
-            -- Если не нашли Web Slinger, разблокируем движение
-            unfreezeCharacter(player.Character)
             controlButton.Text = 'Control Player'
             warn("Web Slinger не найден!")
             return
@@ -455,20 +405,17 @@ controlButton.MouseButton1Click:Connect(function()
                     coroutine.resume(countdownCoroutine)
                 else
                     warn("Промах! Не попали в игрока")
-                    -- Разблокируем движение и возвращаем инструменты
-                    unfreezeCharacter(player.Character)
+                    -- Возвращаем инструменты обратно
                     reequipTools()
                     controlButton.Text = 'Control Player'
                 end
             else
                 warn("У игрока нет HumanoidRootPart")
-                unfreezeCharacter(player.Character)
                 reequipTools()
                 controlButton.Text = 'Control Player'
             end
         else
             warn("Ближайший игрок не найден или вне радиуса")
-            unfreezeCharacter(player.Character)
             reequipTools()
             controlButton.Text = 'Control Player'
         end
@@ -480,7 +427,6 @@ player.CharacterRemoving:Connect(function()
     if isControlling then
         returnToOriginalCharacter()
     else
-        unfreezeCharacter(player.Character)
         reequipTools()
     end
 end)
@@ -489,7 +435,6 @@ screenGui.Destroying:Connect(function()
     if isControlling then
         returnToOriginalCharacter()
     else
-        unfreezeCharacter(player.Character)
         reequipTools()
     end
 end)
