@@ -66,7 +66,7 @@ toggleButtonStroke.Parent = toggleButton
 
 -- Главное меню
 local mainFrame = Instance.new('Frame')
-mainFrame.Size = UDim2.new(0, 250, 0, 240) -- Увеличиваем высоту для новой кнопки
+mainFrame.Size = UDim2.new(0, 250, 0, 240)
 mainFrame.Position = UDim2.new(0, 80, 0, 10)
 mainFrame.BackgroundColor3 = mainColor
 mainFrame.BorderSizePixel = 0
@@ -124,10 +124,8 @@ local function updateMain(input)
     local newX = mainStartPos.X.Offset + delta.X
     local newY = mainStartPos.Y.Offset + delta.Y
 
-    newX =
-        math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
-    newY =
-        math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
+    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
+    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
 
     mainFrame.Position = UDim2.new(0, newX, 0, newY)
 end
@@ -142,16 +140,8 @@ local function updateToggle(input)
     local newX = toggleStartPos.X.Offset + delta.X
     local newY = toggleStartPos.Y.Offset + delta.Y
 
-    newX = math.clamp(
-        newX,
-        0,
-        screenGui.AbsoluteSize.X - toggleButton.AbsoluteSize.X
-    )
-    newY = math.clamp(
-        newY,
-        0,
-        screenGui.AbsoluteSize.Y - toggleButton.AbsoluteSize.Y
-    )
+    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - toggleButton.AbsoluteSize.X)
+    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - toggleButton.AbsoluteSize.Y)
 
     toggleButton.Position = UDim2.new(0, newX, 0, newY)
 end
@@ -341,7 +331,6 @@ end
 
 -- ESP functionality
 local ESPModule = nil
-local espEnabled = false
 
 local function loadESP()
     return safeLoad(
@@ -351,7 +340,7 @@ local function loadESP()
 end
 
 local function startESP()
-    if espEnabled then
+    if functionStates.ESP then
         return true
     end
 
@@ -364,7 +353,6 @@ local function startESP()
             end)
 
             if success then
-                espEnabled = true
                 functionStates.ESP = true
                 return true
             else
@@ -377,7 +365,7 @@ local function startESP()
 end
 
 local function stopESP()
-    if not espEnabled then
+    if not functionStates.ESP then
         return true
     end
 
@@ -403,24 +391,22 @@ local function stopESP()
         end
     end)
 
-    espEnabled = false
     functionStates.ESP = false
     return true
 end
 
 -- Control-Player functionality
 local controlPlayerCleanup = nil
-local controlPlayerEnabled = false
 
 local function loadControlPlayer()
     return safeLoad(
-        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/control-player', -- Замените на ваш URL
+        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/control-player',
         'ControlPlayer'
     )
 end
 
 local function startControlPlayer()
-    if controlPlayerEnabled then
+    if functionStates.ControlPlayer then
         return true
     end
 
@@ -429,12 +415,9 @@ local function startControlPlayer()
         local success, cleanupFunc = pcall(func)
         if success and type(cleanupFunc) == 'function' then
             controlPlayerCleanup = cleanupFunc
-            controlPlayerEnabled = true
             functionStates.ControlPlayer = true
             return true
         elseif success then
-            -- Если функция не возвращает cleanup функцию, но выполняется успешно
-            controlPlayerEnabled = true
             functionStates.ControlPlayer = true
             return true
         else
@@ -451,13 +434,10 @@ local function stopControlPlayer()
         controlPlayerCleanup = nil
     end
     
-    controlPlayerEnabled = false
     functionStates.ControlPlayer = false
     
-    -- Дополнительная очистка, если нужно
     pcall(function()
-        -- Здесь можно добавить дополнительную логику очистки
-        -- например, удаление созданных объектов интерфейса
+        -- Дополнительная очистка, если нужно
     end)
     
     return true
@@ -585,7 +565,7 @@ espToggleStroke.LineJoinMode = Enum.LineJoinMode.Round
 espToggleStroke.Parent = espToggle
 
 espToggle.MouseButton1Click:Connect(function()
-    if espEnabled then
+    if functionStates.ESP then
         if stopESP() then
             espToggle.TextColor3 = textColor
             espToggleStroke.Color = borderColor
@@ -605,7 +585,7 @@ espToggle.MouseButton1Click:Connect(function()
             espToggleStroke.Color = Color3.fromRGB(255, 50, 50)
 
             task.delay(2, function()
-                if not espEnabled then
+                if not functionStates.ESP then
                     espToggle.TextColor3 = textColor
                     espToggleStroke.Color = borderColor
                 end
@@ -755,20 +735,35 @@ task.spawn(function()
     while true do
         task.wait(0.1)
 
-        -- Обновляем цвет ESP кнопки на основе фактического состояния
-        if espEnabled and espToggle.TextColor3 ~= accentColor then
+        -- Обновляем цвет кнопок на основе состояний из functionStates
+        if functionStates.AntiEffects and antiEffectsToggle.TextColor3 ~= accentColor then
+            antiEffectsToggle.TextColor3 = accentColor
+            antiEffectsToggleStroke.Color = accentColor
+        elseif not functionStates.AntiEffects and antiEffectsToggle.TextColor3 == accentColor then
+            antiEffectsToggle.TextColor3 = textColor
+            antiEffectsToggleStroke.Color = borderColor
+        end
+
+        if functionStates.AutoSteal and autoStealToggle.TextColor3 ~= accentColor then
+            autoStealToggle.TextColor3 = accentColor
+            autoStealToggleStroke.Color = accentColor
+        elseif not functionStates.AutoSteal and autoStealToggle.TextColor3 == accentColor then
+            autoStealToggle.TextColor3 = textColor
+            autoStealToggleStroke.Color = borderColor
+        end
+
+        if functionStates.ESP and espToggle.TextColor3 ~= accentColor then
             espToggle.TextColor3 = accentColor
             espToggleStroke.Color = accentColor
-        elseif not espEnabled and espToggle.TextColor3 == accentColor then
+        elseif not functionStates.ESP and espToggle.TextColor3 == accentColor then
             espToggle.TextColor3 = textColor
             espToggleStroke.Color = borderColor
         end
 
-        -- Обновляем цвет Control-Player кнопки
-        if controlPlayerEnabled and controlPlayerToggle.TextColor3 ~= accentColor then
+        if functionStates.ControlPlayer and controlPlayerToggle.TextColor3 ~= accentColor then
             controlPlayerToggle.TextColor3 = accentColor
             controlPlayerToggleStroke.Color = accentColor
-        elseif not controlPlayerEnabled and controlPlayerToggle.TextColor3 == accentColor then
+        elseif not functionStates.ControlPlayer and controlPlayerToggle.TextColor3 == accentColor then
             controlPlayerToggle.TextColor3 = textColor
             controlPlayerToggleStroke.Color = borderColor
         end
