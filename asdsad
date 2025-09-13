@@ -38,31 +38,44 @@ local function ensureWebSlingerInHands()
         return false
     end
 
-    -- Ищем Web Slinger в инвентаре
-    local webSlinger = nil
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item.Name:lower():find('web') and item:IsA('Tool') then
-            webSlinger = item
-            break
+    -- Сначала проверяем, есть ли уже Web Slinger в руках
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA('Tool') and tool.Name:lower():find('web') then
+            return true -- Уже в руках
         end
     end
 
-    -- Если не нашли, ищем в других местах
-    if not webSlinger then
-        for _, item in ipairs(character:GetChildren()) do
-            if item:IsA('Tool') and item.Name:lower():find('web') then
-                webSlinger = item
-                break
-            end
+    -- Ищем Web Slinger в инвентаре (более гибкий поиск)
+    local webSlinger = nil
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger')) then
+            webSlinger = item
+            break
         end
     end
 
     -- Если нашли Web Slinger, берем его в руки
     if webSlinger then
         webSlinger.Parent = character
+        wait(0.1) -- Даем время для перемещения
         return true
     end
 
+    -- Если не нашли, пробуем найти по другому названию
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA('Tool') and item.Name:lower():find('shooter') then
+            webSlinger = item
+            break
+        end
+    end
+
+    if webSlinger then
+        webSlinger.Parent = character
+        wait(0.1)
+        return true
+    end
+
+    warn("Web Slinger не найден в инвентаре!")
     return false
 end
 
@@ -294,18 +307,28 @@ controlButton.MouseButton1Click:Connect(function()
         controlButton.TextColor3 = textColor
         controlButtonStroke.Color = borderColor
     else
-        -- Если не контролируем, проверяем и берем Web Slinger
+        -- Показываем, что идет поиск Web Slinger
+        controlButton.Text = 'Searching Web...'
+        
+        -- Проверяем и берем Web Slinger в руки
         if not ensureWebSlingerInHands() then
-            warn("Web Slinger не найден в инвентаре!")
+            controlButton.Text = 'Control Player'
+            warn("Web Slinger не найден!")
             return
         end
 
+        -- Показываем, что идет поиск игрока
+        controlButton.Text = 'Finding target...'
+        
         local nearestPlayer = findNearestPlayerInRange()
 
         if nearestPlayer and nearestPlayer.Character then
             local targetRoot = nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
 
             if targetRoot then
+                -- Показываем, что идет выстрел
+                controlButton.Text = 'Shooting...'
+                
                 local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
                 Event:FireServer(
                     Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
@@ -349,10 +372,15 @@ controlButton.MouseButton1Click:Connect(function()
                     coroutine.resume(countdownCoroutine)
                 else
                     warn("Не удалось найти игрока, в которого выстрелили")
+                    controlButton.Text = 'Control Player'
                 end
+            else
+                warn("У игрока нет HumanoidRootPart")
+                controlButton.Text = 'Control Player'
             end
         else
             warn("Ближайший игрок не найден или вне радиуса")
+            controlButton.Text = 'Control Player'
         end
     end
 end)
