@@ -400,7 +400,7 @@ local controlPlayerCleanup = nil
 
 local function loadControlPlayer()
     return safeLoad(
-        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/control-player',
+        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/asdsad',
         'ControlPlayer'
     )
 end
@@ -436,8 +436,15 @@ local function stopControlPlayer()
     
     functionStates.ControlPlayer = false
     
+    -- Удаляем GUI если оно осталось
     pcall(function()
-        -- Дополнительная очистка, если нужно
+        local playerGui = player:FindFirstChild('PlayerGui')
+        if playerGui then
+            local controlGui = playerGui:FindFirstChild('ControlPlayerMenu')
+            if controlGui then
+                controlGui:Destroy()
+            end
+        end
     end)
     
     return true
