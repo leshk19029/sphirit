@@ -25,6 +25,47 @@ local function modifyWebRopes()
     return modifiedCount
 end
 
+-- Функция для проверки и взятия Web Slinger в руки
+local function ensureWebSlingerInHands()
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then
+        return false
+    end
+
+    local backpack = localPlayer:FindFirstChild('Backpack')
+    if not backpack then
+        return false
+    end
+
+    -- Ищем Web Slinger в инвентаре
+    local webSlinger = nil
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item.Name:lower():find('web') and item:IsA('Tool') then
+            webSlinger = item
+            break
+        end
+    end
+
+    -- Если не нашли, ищем в других местах
+    if not webSlinger then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA('Tool') and item.Name:lower():find('web') then
+                webSlinger = item
+                break
+            end
+        end
+    end
+
+    -- Если нашли Web Slinger, берем его в руки
+    if webSlinger then
+        webSlinger.Parent = character
+        return true
+    end
+
+    return false
+end
+
 -- Функция для поиска ближайшего игрока в радиусе 20 studs
 local function findNearestPlayerInRange()
     local localPlayer = Players.LocalPlayer
@@ -253,7 +294,12 @@ controlButton.MouseButton1Click:Connect(function()
         controlButton.TextColor3 = textColor
         controlButtonStroke.Color = borderColor
     else
-        -- Если не контролируем, пытаемся выстрелить
+        -- Если не контролируем, проверяем и берем Web Slinger
+        if not ensureWebSlingerInHands() then
+            warn("Web Slinger не найден в инвентаре!")
+            return
+        end
+
         local nearestPlayer = findNearestPlayerInRange()
 
         if nearestPlayer and nearestPlayer.Character then
