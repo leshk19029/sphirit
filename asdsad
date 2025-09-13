@@ -94,6 +94,47 @@ local function disablePlatformStand(targetPlayer)
     end
 end
 
+-- Функция для проверки и взятия Web Slinger в руки
+local function ensureWebSlingerInHands()
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then
+        return false
+    end
+
+    local backpack = localPlayer:FindFirstChild('Backpack')
+    if not backpack then
+        return false
+    end
+
+    -- Ищем Web Slinger в инвентаре
+    local webSlinger = nil
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item.Name:lower():find('web') and item.Name:lower():find('slinger') then
+            webSlinger = item
+            break
+        end
+    end
+
+    -- Если не нашли, ищем в других местах
+    if not webSlinger then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA('Tool') and item.Name:lower():find('web') and item.Name:lower():find('slinger') then
+                webSlinger = item
+                break
+            end
+        end
+    end
+
+    -- Если нашли Web Slinger, берем его в руки
+    if webSlinger then
+        webSlinger.Parent = character
+        return true
+    end
+
+    return false
+end
+
 -- Функция для смены персонажа
 local function swapCharacter(targetPlayer)
     local localPlayer = Players.LocalPlayer
@@ -200,7 +241,7 @@ title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = 'Control Player'
 title.TextColor3 = accentColor
-title.Font = Enum.Font.SciFi
+title.Font = Enum.Font.Code
 title.TextSize = 14
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleBar
@@ -219,6 +260,7 @@ toggleCircle.AnchorPoint = Vector2.new(1, 0)
 toggleCircle.BackgroundColor3 = mainColor
 toggleCircle.Text = "⚙️"
 toggleCircle.TextColor3 = accentColor
+toggleCircle.Font = Enum.Font.Code
 toggleCircle.TextSize = 16
 toggleCircle.Parent = screenGui
 
@@ -263,7 +305,7 @@ local function update(input)
     local newX = startPos.X.Offset + delta.X
     local newY = startPos.Y.Offset + delta.Y
 
-    newX = math.clamp(newX, 0, screenGui.Aabsolutesize.X - mainFrame.AbsoluteSize.X)
+    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
     newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
 
     mainFrame.Position = UDim2.new(0, newX, 0, newY)
@@ -297,7 +339,7 @@ startButton.BackgroundColor3 = mainColor
 startButton.BorderSizePixel = 0
 startButton.Text = 'START'
 startButton.TextColor3 = textColor
-startButton.Font = Enum.Font.SciFi
+startButton.Font = Enum.Font.Code
 startButton.TextSize = 16
 startButton.Parent = contentFrame
 
@@ -330,6 +372,12 @@ end)
 
 -- Обработчик нажатия кнопки Start
 startButton.MouseButton1Click:Connect(function()
+    -- Проверяем и берем Web Slinger в руки
+    if not ensureWebSlingerInHands() then
+        warn("Web Slinger не найден в инвентаре!")
+        return
+    end
+
     local nearestPlayer = findNearestPlayerInRange()
 
     if nearestPlayer and nearestPlayer.Character then
