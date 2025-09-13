@@ -263,7 +263,7 @@ local function update(input)
     local newX = startPos.X.Offset + delta.X
     local newY = startPos.Y.Offset + delta.Y
 
-    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - mainFrame.AbsoluteSize.X)
+    newX = math.clamp(newX, 0, screenGui.Aabsolutesize.X - mainFrame.AbsoluteSize.X)
     newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - mainFrame.AbsoluteSize.Y)
 
     mainFrame.Position = UDim2.new(0, newX, 0, newY)
@@ -355,14 +355,14 @@ startButton.MouseButton1Click:Connect(function()
                 -- Меняем персонажа после использования
                 swapCharacter(shotPlayer)
 
-                -- Изменяем текст кнопки на таймер
-                startButton.Text = '⏳ 10s...'
+                -- Изменяем текст кнопки на таймер (9 секунд вместо 10)
+                startButton.Text = '⏳ 9s...'
                 startButton.TextColor3 = accentColor
                 startButtonStroke.Color = accentColor
                 startButton.Active = false
 
-                -- Запускаем таймер для возврата
-                local timer = 10
+                -- Запускаем таймер для возврата (9 секунд вместо 10)
+                local timer = 9
                 local countdown = coroutine.create(function()
                     while timer > 0 do
                         wait(1)
@@ -417,9 +417,9 @@ end)
 
 -- Очистка при выходе
 player.CharacterRemoving:Connect(function()
-    -- Очистка не требуется, так как velocity был удален
+    -- Очистка не требуется
 end)
 
 screenGui.Destroying:Connect(function()
-    -- Очистка не требуется, так как velocity был удален
+    -- Очистка не требуется
 end)
