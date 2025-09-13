@@ -9,8 +9,8 @@ local originalCharacter = nil
 local originalCameraSettings = {}
 local isControlling = false
 local countdownCoroutine = nil
-local currentTools = {} -- Для хранения текущих инструментов
-local originalHumanoidState = nil -- Для хранения исходного состояния гуманоида
+local currentTools = {}
+local originalHumanoidState = nil
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
@@ -36,7 +36,6 @@ local function unequipAllTools()
     local backpack = localPlayer:FindFirstChild('Backpack')
     if not backpack then return end
     
-    -- Сохраняем текущие инструменты и убираем их
     currentTools = {}
     for _, tool in ipairs(character:GetChildren()) do
         if tool:IsA('Tool') then
@@ -67,19 +66,16 @@ local function freezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
-    -- Сохраняем исходное состояние
     originalHumanoidState = {
         WalkSpeed = humanoid.WalkSpeed,
         JumpPower = humanoid.JumpPower,
         PlatformStand = humanoid.PlatformStand
     }
     
-    -- Замораживаем персонажа
     humanoid.WalkSpeed = 0
     humanoid.JumpPower = 0
-    humanoid.PlatformStand = true -- Это предотвращает движение
+    humanoid.PlatformStand = true
     
-    -- Отключаем все движения
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA('BasePart') then
             part.Anchored = true
@@ -94,12 +90,10 @@ local function unfreezeOriginalCharacter(character)
     local humanoid = character:FindFirstChild('Humanoid')
     if not humanoid then return end
     
-    -- Восстанавливаем состояние гуманоида
     humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
     humanoid.JumpPower = originalHumanoidState.JumpPower
     humanoid.PlatformStand = originalHumanoidState.PlatformStand
     
-    -- Включаем движения обратно
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA('BasePart') then
             part.Anchored = false
@@ -109,66 +103,38 @@ local function unfreezeOriginalCharacter(character)
     originalHumanoidState = nil
 end
 
--- Функция для проверки и взятия Web Slinger в руки
-local function ensureWebSlingerInHands()
+-- Быстрый поиск Web Slinger
+local function findWebSlingerQuick()
     local localPlayer = Players.LocalPlayer
-    local character = localPlayer.Character
-    if not character then
-        return false
-    end
-
     local backpack = localPlayer:FindFirstChild('Backpack')
-    if not backpack then
-        return false
-    end
+    if not backpack then return nil end
 
-    -- Убираем все текущие инструменты из рук
-    unequipAllTools()
-
-    -- Ищем Web Slinger в инвентаре (гибкий поиск)
-    local webSlinger = nil
     for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger') or item.Name:lower():find('shooter')) then
-            webSlinger = item
-            break
+        if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger') or item.Name:lower():find('shooter') or item.Name:lower():find('swing')) then
+            return item
         end
     end
-
-    -- Если не нашли, пробуем другие варианты названий
-    if not webSlinger then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA('Tool') and item.Name:lower():find('swing') then
-                webSlinger = item
-                break
-            end
-        end
-    end
-
-    -- Если нашли Web Slinger, берем его в руки
-    if webSlinger then
-        webSlinger.Parent = character
-        wait(0.2) -- Даем время для перемещения
-        return true
-    end
-
-    -- Если не нашли Web Slinger, возвращаем инструменты обратно
-    reequipTools()
-    warn("Web Slinger не найден в инвентаре!")
-    return false
+    return nil
 end
 
--- Функция для поиска ближайшего игрока в радиусе 20 studs
-local function findNearestPlayerInRange()
+-- Мгновенное взятие Web Slinger
+local function takeWebSlingerInstantly()
+    local webSlinger = findWebSlingerQuick()
+    if not webSlinger then return false end
+    
+    unequipAllTools()
+    webSlinger.Parent = Players.LocalPlayer.Character
+    return true
+end
+
+-- Быстрый поиск ближайшего игрока
+local function findNearestPlayerQuick()
     local localPlayer = Players.LocalPlayer
     local localCharacter = localPlayer.Character
-    if not localCharacter then
-        return nil
-    end
+    if not localCharacter then return nil end
 
     local localRoot = localCharacter:FindFirstChild('HumanoidRootPart')
-    if not localRoot then
-        return nil
-    end
+    if not localRoot then return nil end
 
     local nearestPlayer = nil
     local shortestDistance = math.huge
@@ -192,94 +158,63 @@ local function findNearestPlayerInRange()
     return nearestPlayer
 end
 
--- Функция для поиска игрока, в которого мы выстрелили
-local function findShotPlayer()
+-- Мгновенное вселение в цель
+local function possessTargetInstantly(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    
     local localPlayer = Players.LocalPlayer
     
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character then
-            local character = player.Character
-            local humanoid = character:FindFirstChild('Humanoid')
-            
-            -- Если у игрока PlatformStand включен, значит мы в него выстрелили
-            if humanoid and humanoid.PlatformStand then
-                return player
-            end
-        end
-    end
-    
-    return nil
-end
-
--- Функция для отключения PlatformStand у цели
-local function disablePlatformStand(targetPlayer)
-    if targetPlayer and targetPlayer.Character then
-        local humanoid = targetPlayer.Character:FindFirstChild('Humanoid')
-        if humanoid then
-            humanoid.PlatformStand = false
-        end
-    end
-end
-
--- Функция для смены персонажа
-local function swapCharacter(targetPlayer)
-    local localPlayer = Players.LocalPlayer
-
-    -- Сохраняем оригинального персонажа и настройки камеры
+    -- Сохраняем оригинального персонажа
     originalCharacter = localPlayer.Character
     originalCameraSettings = {
         CameraType = workspace.CurrentCamera.CameraType,
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
-
+    
     -- Замораживаем оригинального персонажа
     freezeOriginalCharacter(originalCharacter)
-
-    -- Отключаем PlatformStand у цели
-    disablePlatformStand(targetPlayer)
-
-    -- Меняем персонажа
+    
+    -- Мгновенно вселяемся в цель
     localPlayer.Character = targetPlayer.Character
+    
+    -- Мгновенно настраиваем камеру
+    workspace.CurrentCamera.CameraSubject = targetPlayer.Character:FindFirstChild('Humanoid')
+    
+    return true
+end
 
-    -- Ждем пока новый персонаж загрузится
-    wait(0.5)
-
-    -- Восстанавливаем камеру
-    workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
-    if targetPlayer.Character:FindFirstChild('Humanoid') then
-        workspace.CurrentCamera.CameraSubject = targetPlayer.Character.Humanoid
-    end
-
-    -- Изменяем WebRopes после вселения в персонажа
-    spawn(function()
-        modifyWebRopes()
-    end)
+-- Мгновенный выстрел и вселение
+local function shootAndPossessInstantly(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    
+    local targetRoot = targetPlayer.Character:FindFirstChild('HumanoidRootPart')
+    if not targetRoot then return false end
+    
+    -- Мгновенный выстрел
+    local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
+    Event:FireServer(
+        Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
+        targetRoot
+    )
+    
+    -- Мгновенное вселение
+    task.wait(0.1) -- Минимальная задержка для обработки выстрела
+    return possessTargetInstantly(targetPlayer)
 end
 
 -- Функция для возврата к оригинальному персонажу
 local function returnToOriginalCharacter()
-    if not originalCharacter then
-        return
-    end
+    if not originalCharacter then return end
 
     local localPlayer = Players.LocalPlayer
-
-    -- Возвращаем оригинального персонажа
     localPlayer.Character = originalCharacter
-
-    -- Размораживаем оригинального персонажа
     unfreezeOriginalCharacter(originalCharacter)
-
-    -- Восстанавливаем камеру
+    
     workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
-    if originalCharacter:FindFirstChild('Humanoid') then
-        workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
-    end
-
-    -- Возвращаем инструменты в руки
+    workspace.CurrentCamera.CameraSubject = originalCharacter:FindFirstChild('Humanoid')
+    
     reequipTools()
-
-    -- Очищаем переменные
+    
     originalCharacter = nil
     originalCameraSettings = {}
     isControlling = false
@@ -296,7 +231,6 @@ end
 -- Создание GUI
 local player = Players.LocalPlayer
 local mainColor = Color3.fromRGB(25, 25, 25)
-local accentColor = Color3.fromRGB(0, 255, 140)
 local textColor = Color3.fromRGB(255, 255, 255)
 local borderColor = Color3.fromRGB(50, 50, 50)
 
@@ -312,7 +246,7 @@ controlButton.Size = UDim2.new(0, 150, 0, 40)
 controlButton.Position = UDim2.new(0, 10, 0, 10)
 controlButton.BackgroundColor3 = mainColor
 controlButton.BorderSizePixel = 0
-controlButton.Text = 'Control Player'
+controlButton.Text = 'CONTROL PLAYER'
 controlButton.TextColor3 = textColor
 controlButton.Font = Enum.Font.Code
 controlButton.TextSize = 14
@@ -333,7 +267,7 @@ controlButtonStroke.Parent = controlButton
 controlButton.MouseEnter:Connect(function()
     TweenService:Create(
         controlButton,
-        TweenInfo.new(0.2),
+        TweenInfo.new(0.1),
         {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
     ):Play()
 end)
@@ -341,7 +275,7 @@ end)
 controlButton.MouseLeave:Connect(function()
     TweenService:Create(
         controlButton,
-        TweenInfo.new(0.2),
+        TweenInfo.new(0.1),
         {BackgroundColor3 = mainColor}
     ):Play()
 end)
@@ -351,17 +285,12 @@ local dragging = false
 local dragStart, startPos
 
 local function update(input)
-    if not dragging then
-        return
-    end
-
+    if not dragging then return end
     local delta = input.Position - dragStart
     local newX = startPos.X.Offset + delta.X
     local newY = startPos.Y.Offset + delta.Y
-
     newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
     newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
-
     controlButton.Position = UDim2.new(0, newX, 0, newY)
 end
 
@@ -388,97 +317,66 @@ end)
 -- Обработчик нажатия кнопки
 controlButton.MouseButton1Click:Connect(function()
     if isControlling then
-        -- Если уже контролируем, отменяем и возвращаемся
         stopCountdown()
         returnToOriginalCharacter()
-        controlButton.Text = 'Control Player'
+        controlButton.Text = 'CONTROL PLAYER'
         controlButton.TextColor3 = textColor
         controlButtonStroke.Color = borderColor
     else
-        -- Показываем, что идет поиск Web Slinger
-        controlButton.Text = 'Taking Web...'
+        -- Мгновенный процесс: взятие Web Slinger → поиск цели → выстрел → вселение
+        controlButton.Text = 'TAKING WEB...'
         
-        -- Проверяем и берем Web Slinger в руки (убирая другие инструменты)
-        if not ensureWebSlingerInHands() then
-            controlButton.Text = 'Control Player'
+        if not takeWebSlingerInstantly() then
+            controlButton.Text = 'CONTROL PLAYER'
             warn("Web Slinger не найден!")
             return
         end
 
-        -- Показываем, что идет поиск игрока
-        controlButton.Text = 'Finding target...'
+        controlButton.Text = 'FINDING TARGET...'
+        local targetPlayer = findNearestPlayerQuick()
         
-        local nearestPlayer = findNearestPlayerInRange()
-
-        if nearestPlayer and nearestPlayer.Character then
-            local targetRoot = nearestPlayer.Character:FindFirstChild('HumanoidRootPart')
-
-            if targetRoot then
-                -- Показываем, что идет выстрел
-                controlButton.Text = 'Shooting...'
-                
-                local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
-                Event:FireServer(
-                    Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
-                    targetRoot
-                )
-
-                -- Ждем и проверяем, попали ли мы
-                controlButton.Text = 'Checking hit...'
-                
-                -- Ждем 1 секунду и проверяем попадание
-                wait(1)
-                local shotPlayer = findShotPlayer()
-                
-                if shotPlayer then
-                    -- Попали! Меняем персонажа
-                    swapCharacter(shotPlayer)
-                    isControlling = true
-
-                    -- Меняем вид кнопки
-                    controlButton.Text = 'CANCEL (9s)'
-                    controlButton.TextColor3 = Color3.fromRGB(255, 100, 100)
-                    controlButtonStroke.Color = Color3.fromRGB(255, 100, 100)
-
-                    -- Запускаем таймер для возврата
-                    local timer = 9
-                    countdownCoroutine = coroutine.create(function()
-                        while timer > 0 and isControlling do
-                            wait(1)
-                            timer = timer - 1
-                            controlButton.Text = 'CANCEL (' .. timer .. 's)'
-                        end
-
-                        if isControlling then
-                            -- Автоматический возврат по истечении времени
-                            returnToOriginalCharacter()
-                            controlButton.Text = 'Control Player'
-                            controlButton.TextColor3 = textColor
-                            controlButtonStroke.Color = borderColor
-                        end
-                    end)
-
-                    coroutine.resume(countdownCoroutine)
-                else
-                    warn("Промах! Не попали в игрока")
-                    -- Возвращаем инструменты обратно
-                    reequipTools()
-                    controlButton.Text = 'Control Player'
-                end
-            else
-                warn("У игрока нет HumanoidRootPart")
-                reequipTools()
-                controlButton.Text = 'Control Player'
-            end
-        else
-            warn("Ближайший игрок не найден или вне радиуса")
+        if not targetPlayer then
+            controlButton.Text = 'CONTROL PLAYER'
             reequipTools()
-            controlButton.Text = 'Control Player'
+            warn("Цель не найдена!")
+            return
+        end
+
+        controlButton.Text = 'SHOOTING...'
+        
+        -- Мгновенный выстрел и вселение
+        if shootAndPossessInstantly(targetPlayer) then
+            isControlling = true
+            controlButton.Text = 'CANCEL (9s)'
+            controlButton.TextColor3 = Color3.fromRGB(255, 100, 100)
+            controlButtonStroke.Color = Color3.fromRGB(255, 100, 100)
+
+            -- Быстрый таймер
+            local timer = 9
+            countdownCoroutine = coroutine.create(function()
+                while timer > 0 and isControlling do
+                    task.wait(1)
+                    timer = timer - 1
+                    controlButton.Text = 'CANCEL (' .. timer .. 's)'
+                end
+
+                if isControlling then
+                    returnToOriginalCharacter()
+                    controlButton.Text = 'CONTROL PLAYER'
+                    controlButton.TextColor3 = textColor
+                    controlButtonStroke.Color = borderColor
+                end
+            end)
+            coroutine.resume(countdownCoroutine)
+        else
+            controlButton.Text = 'CONTROL PLAYER'
+            reequipTools()
+            warn("Ошибка вселения!")
         end
     end
 end)
 
--- Очистка при выходе
+-- Очистка
 player.CharacterRemoving:Connect(function()
     if isControlling then
         returnToOriginalCharacter()
