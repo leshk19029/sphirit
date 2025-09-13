@@ -7,17 +7,17 @@ local TextService = game:GetService('TextService')
 -- Общие настройки
 local ESPModule = {
     TimerESP = {
-        Enabled = false, -- По умолчанию выключено
+        Enabled = false,
         ActiveTimers = {},
     },
     NameTags = {
-        Enabled = false, -- По умолчанию выключено
+        Enabled = false,
         ActiveNameTags = {},
         Connections = {},
         CharacterConnections = {},
     },
     WallHack = {
-        Enabled = false, -- По умолчанию выключено
+        Enabled = false,
         FillColor = Color3.fromRGB(0, 170, 255),
         FillTransparency = 0.22,
         OutlineColor = Color3.fromRGB(0, 170, 255),
@@ -25,7 +25,7 @@ local ESPModule = {
         Highlights = {},
     },
     PetDisplay = {
-        Enabled = false, -- По умолчанию выключено
+        Enabled = false,
         MAX_DISTANCE = 500,
         AUTO_COLOR = true,
         TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
@@ -41,7 +41,6 @@ local ESPModule = {
         lastBestSalary = '',
         currentColor = Color3.fromRGB(255, 255, 150),
         FONT_WEIGHT = Enum.FontWeight.Bold,
-        currentTextOffset = 12,
     },
 }
 
@@ -183,7 +182,6 @@ local function SetupPlotTimer(plot)
 end
 
 local function InitializeTimerESP()
-    -- Очистка существующих таймеров
     for hitbox, timerData in pairs(ESPModule.TimerESP.ActiveTimers) do
         if timerData then
             if timerData.Billboard then timerData.Billboard:Destroy() end
@@ -233,15 +231,14 @@ local function CreateNameTag(player)
     local humanoidRootPart = player.Character:FindFirstChild('HumanoidRootPart')
     if not humanoidRootPart then return end
 
-    if ESPModule.NameTags.ActiveNameTags[player] then
-        RemovePlayerNameTag(player)
-    end
+    -- Удаляем старый nametag если есть
+    RemovePlayerNameTag(player)
 
     local displayName = GetDisplayName(player)
     local width = CalculateBackgroundWidth(displayName)
 
     local nameTagPart = Instance.new('Part')
-    nameTagPart.Name = 'NameTagPart'
+    nameTagPart.Name = 'NameTagPart_' .. player.Name
     nameTagPart.Size = Vector3.new(2, 0.5, 0.5)
     nameTagPart.Transparency = 1
     nameTagPart.CanCollide = false
@@ -285,18 +282,29 @@ local function CreateNameTag(player)
     nameLabel.Parent = billboard
 
     local connection = heartbeat:Connect(function()
-        if player.Character and humanoidRootPart and ESPModule.NameTags.Enabled then
+        if player.Character and humanoidRootPart and humanoidRootPart.Parent and ESPModule.NameTags.Enabled then
             nameTagPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 5, 0)
         else
+            -- Персонаж уничтожен или отключен ESP
             connection:Disconnect()
             if nameTagPart then nameTagPart:Destroy() end
+            ESPModule.NameTags.ActiveNameTags[player] = nil
         end
     end)
+
+    -- Отслеживаем уничтожение персонажа
+    local characterConnection
+    if player.Character then
+        characterConnection = player.Character.Destroying:Connect(function()
+            RemovePlayerNameTag(player)
+        end)
+    end
 
     ESPModule.NameTags.ActiveNameTags[player] = {
         Billboard = billboard,
         Part = nameTagPart,
         Connection = connection,
+        CharacterConnection = characterConnection
     }
 
     if not ESPModule.NameTags.Connections[player] then
@@ -311,20 +319,19 @@ end
 local function RemovePlayerNameTag(player)
     if ESPModule.NameTags.ActiveNameTags[player] then
         local tagData = ESPModule.NameTags.ActiveNameTags[player]
-        if tagData.Billboard then tagData.Billboard:Destroy() end
-        if tagData.Part then tagData.Part:Destroy() end
-        if tagData.Connection then tagData.Connection:Disconnect() end
+        if tagData.Billboard and tagData.Billboard.Parent then 
+            tagData.Billboard:Destroy() 
+        end
+        if tagData.Part and tagData.Part.Parent then 
+            tagData.Part:Destroy() 
+        end
+        if tagData.Connection then 
+            tagData.Connection:Disconnect() 
+        end
+        if tagData.CharacterConnection then 
+            tagData.CharacterConnection:Disconnect() 
+        end
         ESPModule.NameTags.ActiveNameTags[player] = nil
-    end
-    
-    if ESPModule.NameTags.Connections[player] then
-        ESPModule.NameTags.Connections[player]:Disconnect()
-        ESPModule.NameTags.Connections[player] = nil
-    end
-
-    if ESPModule.NameTags.CharacterConnections[player] then
-        ESPModule.NameTags.CharacterConnections[player]:Disconnect()
-        ESPModule.NameTags.CharacterConnections[player] = nil
     end
 end
 
@@ -332,27 +339,36 @@ local function ToggleNameTags(state)
     ESPModule.NameTags.Enabled = state
 
     if state then
+        -- Очищаем старые nametags
+        for player, _ in pairs(ESPModule.NameTags.ActiveNameTags) do
+            RemovePlayerNameTag(player)
+        end
+
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= localPlayer then
+                -- Создаем соединение для нового персонажа
                 if not ESPModule.NameTags.CharacterConnections[player] then
                     ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
-                        task_wait(1)
+                        task_wait(0.5) -- Ждем пока персонаж полностью загрузится
                         if ESPModule.NameTags.Enabled then
                             CreateNameTag(player)
                         end
                     end)
                 end
+                
+                -- Создаем nametag для текущего персонажа
                 if player.Character then
                     CreateNameTag(player)
                 end
             end
         end
 
+        -- Обработка новых игроков
         Players.PlayerAdded:Connect(function(player)
             if player ~= localPlayer then
                 if not ESPModule.NameTags.CharacterConnections[player] then
                     ESPModule.NameTags.CharacterConnections[player] = player.CharacterAdded:Connect(function(character)
-                        task_wait(1)
+                        task_wait(0.5)
                         if ESPModule.NameTags.Enabled then
                             CreateNameTag(player)
                         end
@@ -361,10 +377,17 @@ local function ToggleNameTags(state)
             end
         end)
     else
-        for player, tagData in pairs(ESPModule.NameTags.ActiveNameTags) do
+        -- Отключаем все nametags
+        for player, _ in pairs(ESPModule.NameTags.ActiveNameTags) do
             RemovePlayerNameTag(player)
         end
         ESPModule.NameTags.ActiveNameTags = {}
+        
+        -- Отключаем соединения
+        for player, connection in pairs(ESPModule.NameTags.CharacterConnections) do
+            if connection then connection:Disconnect() end
+        end
+        ESPModule.NameTags.CharacterConnections = {}
     end
 end
 
@@ -376,7 +399,7 @@ local function createHighlight(character, player)
     end
     
     local highlight = Instance.new("Highlight")
-    highlight.Name = "Highlight"
+    highlight.Name = "Highlight_" .. player.Name
     highlight.Adornee = character
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillColor = ESPModule.WallHack.FillColor
@@ -476,7 +499,6 @@ local function clearPetBillboards()
         end
     end
     ESPModule.PetDisplay.currentBillboard = nil
-    ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.TEXT_OFFSET_NEAR
 end
 
 local function findMostValuablePet()
@@ -524,12 +546,6 @@ local function findMostValuablePet()
     return bestSpawn, bestName, bestSalary, bestValue
 end
 
-local function calculateTextOffset(distance)
-    local normalizedDistance = math_clamp(distance / ESPModule.PetDisplay.MAX_DISTANCE, 0, 1)
-    return ESPModule.PetDisplay.TEXT_OFFSET_NEAR + 
-           (ESPModule.PetDisplay.TEXT_OFFSET_FAR - ESPModule.PetDisplay.TEXT_OFFSET_NEAR) * normalizedDistance
-end
-
 local function createPetBillboard(spawn, name, salaryText)
     clearPetBillboards()
     if not spawn or not ESPModule.PetDisplay.Enabled then return end
@@ -543,7 +559,7 @@ local function createPetBillboard(spawn, name, salaryText)
     billboard.Adornee = spawn
     billboard.AlwaysOnTop = true
     billboard.Size = UDim2.new(12, 0, 4, 0)
-    billboard.StudsOffset = Vector3.new(0, ESPModule.PetDisplay.currentTextOffset, 0)
+    billboard.StudsOffset = Vector3.new(0, ESPModule.PetDisplay.TEXT_OFFSET_NEAR, 0)
     billboard.MaxDistance = ESPModule.PetDisplay.MAX_DISTANCE
     billboard.Parent = spawn
 
@@ -567,27 +583,11 @@ local function createPetBillboard(spawn, name, salaryText)
     )
     textLabel.Parent = billboard
 
-    local lastUpdate = os.clock()
     local connection = heartbeat:Connect(function()
-        local currentTime = os.clock()
-        local deltaTime = currentTime - lastUpdate
-        lastUpdate = currentTime
-        
         if not spawn or not spawn.Parent or not billboard or not billboard.Parent then
             connection:Disconnect()
             if billboard then billboard:Destroy() end
             return
-        end
-
-        local camera = Workspace.CurrentCamera
-        if camera then
-            local distance = (spawn.Position - camera.CFrame.Position).Magnitude
-            local targetOffset = calculateTextOffset(distance)
-            
-            ESPModule.PetDisplay.currentTextOffset = ESPModule.PetDisplay.currentTextOffset + 
-                (targetOffset - ESPModule.PetDisplay.currentTextOffset) * math.min(deltaTime * 8, 1)
-            
-            billboard.StudsOffset = Vector3.new(0, ESPModule.PetDisplay.currentTextOffset, 0)
         end
     end)
 
@@ -665,10 +665,7 @@ function ESPModule.ToggleAll(state)
         ESPModule.TimerESP.ActiveTimers = {}
         
         -- Очистка NameTags
-        for player, _ in pairs(ESPModule.NameTags.ActiveNameTags) do
-            RemovePlayerNameTag(player)
-        end
-        ESPModule.NameTags.ActiveNameTags = {}
+        ToggleNameTags(false)
         
         -- Очистка WallHack
         for player, highlight in pairs(ESPModule.WallHack.Highlights) do
@@ -686,13 +683,11 @@ end
 
 -- ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
--- Убрал автоматический запуск ESP при загрузке
-
 -- Обработчики игроков
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
 
--- Обновление позиций для TimerESP (только если включено)
+-- Обновление позиций для TimerESP
 heartbeat:Connect(function()
     if not ESPModule.TimerESP.Enabled then return end
 
@@ -714,7 +709,6 @@ end)
 -- Очистка при выходе игрока
 Players.PlayerRemoving:Connect(function(player)
     if player == localPlayer then
-        -- Очищаем всё при выходе локального игрока
         ESPModule.ToggleAll(false)
     else
         RemovePlayerNameTag(player)
