@@ -400,7 +400,7 @@ local controlPlayerCleanup = nil
 
 local function loadControlPlayer()
     return safeLoad(
-        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/asdsad',
+        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/control-player',
         'ControlPlayer'
     )
 end
