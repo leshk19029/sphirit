@@ -1,668 +1,656 @@
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
+local Workspace = game:GetService('Workspace')
 local UserInputService = game:GetService('UserInputService')
-local ReplicatedStorage = game:GetService('ReplicatedStorage')
-local ProximityPromptService = game:GetService('ProximityPromptService')
-local TweenService = game:GetService('TweenService')
+local CoreGui = game:GetService('CoreGui')
+local TextService = game:GetService('TextService')
+local TweenService = game:GetService("TweenService")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild('PlayerGui')
-local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild('HumanoidRootPart')
+-- Общие настройки
+local localPlayer = Players.LocalPlayer
+local plot = Workspace.Plots
 
--- Script states
-local isActive = false
-local isMoving = false
-local promptTriggered = false
-local armCheckConnection = nil
-local promptConnection = nil
-local activeConnections = {}
-local screenGui = nil
+-- Конфигурация BRAINROT ESP
+local CONFIG = {
+    MAX_DISTANCE = 500,
+    AUTO_COLOR = true,
+    MIN_BRIGHTNESS = 0.7,
+    TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
+    TEXT_STROKE_TRANSPARENCY = 0,
+    FONT = Enum.Font.TitilliumWeb,
+    UPDATE_INTERVAL = 2,
+    TEXT_OFFSET_NEAR = 12.0,
+    TEXT_OFFSET_FAR = 17.0,
+    TEXT_SIZE_NEAR = 36,
+    TEXT_SIZE_FAR = 24,
+    VALUE_THRESHOLD = 1.1,
+    FONT_WEIGHT = Enum.FontWeight.Bold,
+    SMOOTHING_FACTOR = 0.2,
+}
 
--- Цвета для нового стиля
-local mainColor = Color3.fromRGB(25, 25, 25)
-local accentColor = Color3.fromRGB(0, 255, 140)
-local textColor = Color3.fromRGB(255, 255, 255)
-local borderColor = Color3.fromRGB(50, 50, 50)
+-- Конфигурация NAMETAGS
+local NAMETAG_SETTINGS = {
+    Enabled = true,
+    ActiveNameTags = {},
+    Connections = {}
+}
 
--- === REDESIGNED MENU ===
-local function createMenu()
-    if screenGui and screenGui.Parent then
-        screenGui:Destroy()
+-- Конфигурация TIMERESP
+local TIMERESP_SETTINGS = {
+    Enabled = true,
+    ActiveTimers = {},
+}
+
+-- Конфигурация WALLHACK
+local WALLHACK_SETTINGS = {
+    FillColor = Color3.fromRGB(0, 170, 255),
+    FillTransparency = 0.22,
+    OutlineColor = Color3.fromRGB(0, 170, 255),
+    OutlineTransparency = 0.08,
+    Enabled = true
+}
+
+-- Глобальные переменные
+local currentBillboard = nil
+local brainrotConnections = {}
+local lastBestValue = 0
+local lastBestSpawn = nil
+local brainrotEnabled = true
+local controlGUI = nil
+local currentColor = Color3.fromRGB(255, 255, 150)
+local currentTextSize = CONFIG.TEXT_SIZE_NEAR
+local currentTextOffset = CONFIG.TEXT_OFFSET_NEAR
+local wallHighlights = {}
+local timerEspConnections = {}
+
+-- BRAINROT ESP функции
+local function generateLightColor()
+    local function getLightComponent()
+        return math.random(160, 255) / 255
     end
 
-    screenGui = Instance.new('ScreenGui')
-    screenGui.Name = 'ForestSpiritControl'
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    local r, g, b = getLightComponent(), getLightComponent(), getLightComponent()
+    local brightness = (r + g + b) / 3
 
-    local mainFrame = Instance.new('Frame')
-    mainFrame.Size = UDim2.new(0, 292, 0, 150)
-    mainFrame.Position = UDim2.new(0.5, -625, 0.3, 0)
-    mainFrame.BackgroundColor3 = mainColor
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = screenGui
-
-    local uiCorner = Instance.new('UICorner')
-    uiCorner.CornerRadius = UDim.new(0, 6)
-    uiCorner.Parent = mainFrame
-
-    local mainShadow = Instance.new('UIStroke')
-    mainShadow.Thickness = 2
-    mainShadow.Color = borderColor
-    mainShadow.LineJoinMode = Enum.LineJoinMode.Round
-    mainShadow.Parent = mainFrame
-
-    local headerFrame = Instance.new('Frame')
-    headerFrame.Size = UDim2.new(1, 0, 0, 33)
-    headerFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    headerFrame.BorderSizePixel = 0
-    headerFrame.Parent = mainFrame
-
-    local headerCorner = Instance.new('UICorner')
-    headerCorner.CornerRadius = UDim.new(0, 6)
-    headerCorner.Parent = headerFrame
-
-    local headerLabel = Instance.new('TextLabel')
-    headerLabel.Size = UDim2.new(1, 0, 1, 0)
-    headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = 'Auto-Steal v2'
-    headerLabel.TextColor3 = accentColor
-    headerLabel.TextSize = 15
-    headerLabel.Font = Enum.Font.Code
-    headerLabel.Parent = headerFrame
-
-    local statusPanel = Instance.new('Frame')
-    statusPanel.Size = UDim2.new(1, -17, 0, 50)
-    statusPanel.Position = UDim2.new(0, 8, 0, 42)
-    statusPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    statusPanel.BorderSizePixel = 0
-    statusPanel.Parent = mainFrame
-
-    local statusCorner = Instance.new('UICorner')
-    statusCorner.CornerRadius = UDim.new(0, 6)
-    statusCorner.Parent = statusPanel
-
-    local statusLabel = Instance.new('TextLabel')
-    statusLabel.Size = UDim2.new(1, -8, 1, -8)
-    statusLabel.Position = UDim2.new(0, 4, 0, 4)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = 'Press START to begin'
-    statusLabel.TextColor3 = textColor
-    statusLabel.TextSize = 16
-    statusLabel.Font = Enum.Font.Code
-    statusLabel.TextWrapped = true
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = statusPanel
-
-    local buttonsFrame = Instance.new('Frame')
-    buttonsFrame.Size = UDim2.new(1, -17, 0, 42)
-    buttonsFrame.Position = UDim2.new(0, 8, 0, 100)
-    buttonsFrame.BackgroundTransparency = 1
-    buttonsFrame.Parent = mainFrame
-
-    local actionBtn = Instance.new('TextButton')
-    actionBtn.Size = UDim2.new(1, 0, 1, 0)
-    actionBtn.BackgroundColor3 = mainColor
-    actionBtn.Text = 'START'
-    actionBtn.TextColor3 = textColor
-    actionBtn.TextSize = 18
-    actionBtn.Font = Enum.Font.Code
-    actionBtn.Parent = buttonsFrame
-
-    local actionCorner = Instance.new('UICorner')
-    actionCorner.CornerRadius = UDim.new(0, 6)
-    actionCorner.Parent = actionBtn
-
-    local btnStroke = Instance.new('UIStroke')
-    btnStroke.Thickness = 2
-    btnStroke.Color = borderColor
-    btnStroke.LineJoinMode = Enum.LineJoinMode.Round
-    btnStroke.Parent = actionBtn
-
-    -- Эффекты при наведении
-    actionBtn.MouseEnter:Connect(function()
-        TweenService:Create(
-            actionBtn,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-        ):Play()
-    end)
-
-    actionBtn.MouseLeave:Connect(function()
-        TweenService:Create(
-            actionBtn,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = mainColor}
-        ):Play()
-    end)
-
-    -- === DRAGGABLE FUNCTIONALITY ===
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-
-    headerFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
-        end
-    end)
-
-    headerFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if
-            dragging
-            and input.UserInputType == Enum.UserInputType.MouseMovement
-        then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    return statusLabel, actionBtn, mainFrame
-end
-
--- === FUNCTION TO UPDATE STATUS LABEL ===
-local function updateStatus(text)
-    if statusLabel then
-        statusLabel.Text = text
-    end
-end
-
-local statusLabel, actionBtn, mainFrame = createMenu()
-
--- === RESET STATUS ON CHARACTER RESPAWN ===
-table.insert(
-    activeConnections,
-    player.CharacterAdded:Connect(function(newCharacter)
-        character = newCharacter
-        hrp = newCharacter:WaitForChild('HumanoidRootPart')
-        updateStatus('Ready to work')
-    end)
-)
-
--- === SCRIPT FUNCTIONALITY ===
-local function FindDelivery()
-    local plots = workspace:FindFirstChild('Plots')
-    if not plots then
-        warn('Plots folder not found in workspace')
-        return
-    end
-    for _, plot in pairs(plots:GetChildren()) do
-        local sign = plot:FindFirstChild('PlotSign')
-        if sign then
-            local yourBase = sign:FindFirstChild('YourBase')
-            if yourBase and yourBase.Enabled then
-                local hitbox = plot:FindFirstChild('DeliveryHitbox')
-                if hitbox then
-                    return hitbox
-                end
-            end
-        end
-    end
-    warn('No valid DeliveryHitbox found')
-end
-
-local function setupFlight()
-    if hrp:FindFirstChild('FlightAttachment') then
-        hrp.FlightAttachment:Destroy()
-    end
-    if hrp:FindFirstChildOfClass('LinearVelocity') then
-        hrp:FindFirstChildOfClass('LinearVelocity'):Destroy()
-    end
-
-    local attachment = Instance.new('Attachment')
-    attachment.Name = 'FlightAttachment'
-    attachment.Parent = hrp
-
-    local lv = Instance.new('LinearVelocity')
-    lv.Attachment0 = attachment
-    lv.RelativeTo = Enum.ActuatorRelativeTo.World
-    lv.MaxForce = math.huge
-    lv.Name = 'FlightVelocity'
-    lv.Parent = hrp
-    return lv, attachment
-end
-
-local function moveToDelivery()
-    local targetHitbox = FindDelivery()
-    if not targetHitbox then
-        warn('No target to move towards')
-        updateStatus('No delivery target found')
-        return
-    end
-
-    for _, obj in ipairs(hrp:GetChildren()) do
-        if obj:IsA('LinearVelocity') or obj:IsA('Attachment') then
-            obj:Destroy()
-        end
-    end
-
-    local lv, attachment = setupFlight()
-    updateStatus('Flying to delivery...')
-    task.wait(0.2)
-
-    local speed = 25
-    local reached = false
-    local maxTime = 8
-    local startTime = tick()
-
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            return
-        end
-
-        if not targetHitbox or not targetHitbox:IsDescendantOf(workspace) then
-            warn('Target lost during flight')
-            updateStatus('Delivery target lost')
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            return
-        end
-
-        local targetPos = targetHitbox.Position - Vector3.new(0, 6, 0)
-        local direction = (targetPos - hrp.Position)
-        local distance = direction.Magnitude
-
-        if distance <= 0.5 then
-            updateStatus(
-                'Reached delivery target, distance: ' .. math.floor(distance)
-            )
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            local humanoid = character:FindFirstChild('Humanoid')
-            if humanoid then
-                humanoid.PlatformStand = false
-                updateStatus('PlatformStand disabled')
-            end
-            return
-        end
-
-        if tick() - startTime >= maxTime then
-            warn('Timeout before reaching delivery target')
-            updateStatus('Timeout during delivery')
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            return
-        end
-
-        local unitDir = direction.Unit
-        lv.VectorVelocity =
-            Vector3.new(unitDir.X * speed, unitDir.Y * speed, unitDir.Z * speed)
-        updateStatus('Moving to delivery, distance: ' .. math.floor(distance))
-    end)
-
-    while not reached do
-        task.wait(0.12)
-    end
-
-    if not isMoving then
-        return
-    end
-
-    updateStatus('Starting smooth deceleration for delivery')
-    lv, attachment = setupFlight()
-    for i = 1, 12 do
-        if not isMoving then
-            break
-        end
-        local dir = (
-            targetHitbox.Position
-            - Vector3.new(0, 6, 0)
-            - hrp.Position
-        )
-        if dir.Magnitude > 0 then
-            dir = dir.Unit
-            lv.VectorVelocity =
-                Vector3.new(dir.X * speed, dir.Y * speed, dir.Z * speed)
-            updateStatus('Decelerating for delivery, iteration: ' .. i)
+    if brightness < CONFIG.MIN_BRIGHTNESS then
+        if r < g and r < b then
+            r = CONFIG.MIN_BRIGHTNESS
+        elseif g < b then
+            g = CONFIG.MIN_BRIGHTNESS
         else
-            lv.VectorVelocity = Vector3.zero
+            b = CONFIG.MIN_BRIGHTNESS
         end
-        task.wait(0.05)
     end
-    lv:Destroy()
 
-    if not isMoving then
+    return Color3.new(r, g, b)
+end
+
+local function formatSalaryText(value)
+    if not value then
+        return '0/S'
+    end
+    value = tonumber(value) or 0
+
+    if value >= 1000000 then
+        return string.format('%.1fM/s', value / 1000000)
+    elseif value >= 1000 then
+        return string.format('%.1fK/s', value / 1000)
+    else
+        return string.format('%d/s', math.floor(value))
+    end
+end
+
+local function parseSalaryValue(text)
+    if not text then
+        return 0
+    end
+    text = text:upper():gsub('%s+', ''):gsub(',', '')
+    local numberPart = text:gsub('[^%d%.]', '')
+    local number = tonumber(numberPart) or 0
+
+    if text:find('M/S') then
+        return number * 1000000
+    elseif text:find('K/S') then
+        return number * 1000
+    else
+        return number
+    end
+end
+
+local function clearBillboards()
+    if currentBillboard and currentBillboard.Parent then
+        currentBillboard:Destroy()
+    end
+    currentBillboard = nil
+
+    for _, conn in pairs(brainrotConnections) do
+        conn:Disconnect()
+    end
+    brainrotConnections = {}
+
+    currentTextSize = CONFIG.TEXT_SIZE_NEAR
+    currentTextOffset = CONFIG.TEXT_OFFSET_NEAR
+end
+
+local function findMostValuablePet()
+    local bestValue = 0
+    local bestSpawn, bestName, bestSalary = nil, '', ''
+    local foundAny = false
+
+    for _, plotInstance in ipairs(plot:GetChildren()) do
+        if not plotInstance:FindFirstChild('PlotSign') or not plotInstance:FindFirstChild('AnimalPodiums') then
+            continue
+        end
+
+        local isPlayerPlot = plotInstance.PlotSign:FindFirstChild('YourBase') and plotInstance.PlotSign.YourBase.Enabled
+        if not isPlayerPlot then
+            for _, podium in ipairs(plotInstance.AnimalPodiums:GetChildren()) do
+                if not podium:FindFirstChild('Base') or not podium.Base:FindFirstChild('Spawn') then
+                    continue
+                end
+
+                local spawn = podium.Base.Spawn
+                if not spawn:FindFirstChild('Attachment') then
+                    continue
+                end
+
+                local overhead = spawn.Attachment:FindFirstChild('AnimalOverhead')
+                if overhead and overhead:FindFirstChild('Generation') and overhead:FindFirstChild('DisplayName') then
+                    local salaryText = overhead.Generation.Text
+                    local value = parseSalaryValue(salaryText)
+                    foundAny = true
+
+                    if value > bestValue then
+                        bestValue = value
+                        bestSpawn = spawn
+                        bestName = overhead.DisplayName.Text
+                        bestSalary = salaryText
+                    end
+                end
+            end
+        end
+    end
+
+    return foundAny and bestSpawn or nil, bestName, bestSalary, bestValue
+end
+
+local function smoothLerp(current, target, alpha, deltaTime)
+    local smoothing = math.min(alpha * deltaTime * 12, 1)
+    return current + (target - current) * smoothing
+end
+
+local function calculateTextSize(distance)
+    local normalizedDistance = math.clamp(distance / CONFIG.MAX_DISTANCE, 0, 1)
+    local sizeFactor = 1 - (normalizedDistance * normalizedDistance * 0.8)
+    return CONFIG.TEXT_SIZE_NEAR * sizeFactor + CONFIG.TEXT_SIZE_FAR * (1 - sizeFactor)
+end
+
+local function calculateTextOffset(distance)
+    local normalizedDistance = math.clamp(distance / CONFIG.MAX_DISTANCE, 0, 1)
+    local offsetFactor = normalizedDistance * normalizedDistance
+    return CONFIG.TEXT_OFFSET_NEAR + (CONFIG.TEXT_OFFSET_FAR - CONFIG.TEXT_OFFSET_NEAR) * offsetFactor
+end
+
+local function createPetBillboard(spawn, name, salaryText)
+    clearBillboards()
+    if not spawn or not brainrotEnabled then
         return
     end
 
-    updateStatus('Starting smooth descent for delivery')
-    lv, attachment = setupFlight()
-    local targetY = targetHitbox.Position.Y - 6 + 2.5
-    local reachedY = false
-    connection = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reachedY = true
+    if CONFIG.AUTO_COLOR then
+        currentColor = generateLightColor()
+    end
+
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'PetDisplay'
+    billboard.Adornee = spawn
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(8, 0, 2, 0)
+    billboard.StudsOffset = Vector3.new(0, currentTextOffset, 0)
+    billboard.MaxDistance = CONFIG.MAX_DISTANCE
+    billboard.Parent = spawn
+
+    local textLabel = Instance.new('TextLabel')
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.Text = name .. '\n' .. formatSalaryText(parseSalaryValue(salaryText))
+    textLabel.TextColor3 = currentColor
+    textLabel.TextStrokeColor3 = CONFIG.TEXT_STROKE_COLOR
+    textLabel.TextStrokeTransparency = CONFIG.TEXT_STROKE_TRANSPARENCY
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextSize = currentTextSize
+    textLabel.Font = CONFIG.FONT
+    textLabel.TextScaled = false
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.FontFace = Font.new(
+        'rbxasset://fonts/families/TitilliumWeb.json',
+        CONFIG.FONT_WEIGHT,
+        Enum.FontStyle.Normal
+    )
+    textLabel.Parent = billboard
+
+    currentBillboard = billboard
+
+    local lastUpdateTime = os.clock()
+
+    local function updateBillboard()
+        if not brainrotEnabled or not billboard or not billboard.Parent then
             return
         end
 
-        if hrp.Position.Y <= targetY then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reachedY = true
-            local humanoid = character:FindFirstChild('Humanoid')
-            if humanoid then
-                humanoid.PlatformStand = false
-                updateStatus('PlatformStand disabled')
+        local camera = Workspace.CurrentCamera
+        if not camera then
+            return
+        end
+
+        local currentTime = os.clock()
+        local deltaTime = currentTime - lastUpdateTime
+        lastUpdateTime = currentTime
+
+        deltaTime = math.min(deltaTime, 0.1)
+
+        local distance = (spawn.Position - camera.CFrame.Position).Magnitude
+        
+        local targetTextSize = calculateTextSize(distance)
+        local targetTextOffset = calculateTextOffset(distance)
+
+        currentTextSize = smoothLerp(currentTextSize, targetTextSize, CONFIG.SMOOTHING_FACTOR, deltaTime)
+        currentTextOffset = smoothLerp(currentTextOffset, targetTextOffset, CONFIG.SMOOTHING_FACTOR, deltaTime)
+
+        textLabel.TextSize = math.floor(currentTextSize + 0.5)
+        billboard.StudsOffset = Vector3.new(0, currentTextOffset, 0)
+    end
+
+    local connection = RunService.RenderStepped:Connect(updateBillboard)
+    table.insert(brainrotConnections, connection)
+end
+
+-- NAMETAGS функции
+local TWEEN_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function CalculateBackgroundWidth(text)
+    local textSize = TextService:GetTextSize(
+        text,
+        14,
+        Enum.Font.GothamBold,
+        Vector2.new(1000, 22)
+    )
+    return math.max(60, textSize.X + 20)
+end
+
+local function GetDisplayName(player)
+    return player.DisplayName
+end
+
+local function UpdateNameTag(nameTag, player)
+    if not nameTag or not nameTag:FindFirstChild('Background') or not nameTag:FindFirstChild('Name') then
+        return
+    end
+
+    local background = nameTag.Background
+    local nameLabel = nameTag.Name
+    local displayName = GetDisplayName(player)
+
+    nameLabel.Text = displayName
+    local newWidth = CalculateBackgroundWidth(displayName)
+
+    local backgroundTween = TweenService:Create(background, TWEEN_INFO, {
+        Size = UDim2.new(0, newWidth, 0, 18),
+        Position = UDim2.new(0.5, -newWidth / 2, 0, 0)
+    })
+    backgroundTween:Play()
+
+    local billboardTween = TweenService:Create(nameTag, TWEEN_INFO, {
+        Size = UDim2.new(0, newWidth, 0, 18)
+    })
+    billboardTween:Play()
+end
+
+local function CreateNameTag(player)
+    if not player.Character then
+        return
+    end
+    local head = player.Character:FindFirstChild('Head')
+    if not head then
+        return
+    end
+
+    if NAMETAG_SETTINGS.ActiveNameTags[player] then
+        NAMETAG_SETTINGS.ActiveNameTags[player]:Destroy()
+        NAMETAG_SETTINGS.ActiveNameTags[player] = nil
+    end
+
+    local displayName = GetDisplayName(player)
+    local width = CalculateBackgroundWidth(displayName)
+
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'Nametag_' .. player.Name
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, width, 0, 18)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 500
+    billboard.Parent = head
+
+    local background = Instance.new('Frame')
+    background.Name = 'Background'
+    background.Size = UDim2.new(0, width, 0, 18)
+    background.Position = UDim2.new(0.5, -width / 2, 0, 0)
+    background.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    background.BackgroundTransparency = 0.25
+    background.BorderSizePixel = 0
+
+    local corner = Instance.new('UICorner')
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = background
+    background.Parent = billboard
+
+    local nameLabel = Instance.new('TextLabel')
+    nameLabel.Name = 'Name'
+    nameLabel.Size = UDim2.new(1, -12, 1, 0)
+    nameLabel.Position = UDim2.new(0, 6, 0, 0)
+    nameLabel.Text = displayName
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 14
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.TextStrokeTransparency = 0.3
+    nameLabel.Parent = billboard
+
+    NAMETAG_SETTINGS.ActiveNameTags[player] = billboard
+
+    if not NAMETAG_SETTINGS.Connections[player] then
+        NAMETAG_SETTINGS.Connections[player] = player:GetPropertyChangedSignal('DisplayName'):Connect(function()
+            if NAMETAG_SETTINGS.Enabled and NAMETAG_SETTINGS.ActiveNameTags[player] then
+                UpdateNameTag(billboard, player)
             end
-            return
-        end
-        lv.VectorVelocity = Vector3.new(0, -speed, 0)
-        updateStatus(
-            'Descending for delivery, current Y: ' .. math.floor(hrp.Position.Y)
-        )
-    end)
-
-    while not reachedY do
-        task.wait(0.05)
+        end)
     end
-
-    updateStatus('Cleaning up delivery objects')
-    task.delay(0.5, function()
-        if attachment then
-            attachment:Destroy()
-        end
-        if isMoving then
-            updateStatus('Idle')
-            isMoving = false
-            actionBtn.Text = 'START'
-            actionBtn.BackgroundColor3 = mainColor
-        end
-    end)
 end
 
-local function getLaserCenter(model)
-    if not model:IsA('Model') then
-        return nil
-    end
-    local primary = model.PrimaryPart
-        or model:FindFirstChildWhichIsA('BasePart')
-    if not primary then
-        return nil
-    end
-    return primary.Position
-end
+local function ToggleNameTags(state)
+    NAMETAG_SETTINGS.Enabled = state
 
-local function isSizeClose(partSize, targetSize, tolerance)
-    return math.abs(partSize.X - targetSize.X) <= tolerance
-        and math.abs(partSize.Y - targetSize.Y) <= tolerance
-        and math.abs(partSize.Z - targetSize.Z) <= tolerance
-end
-
-local function getTargetForFloor(level, fromThirdFloor)
-    local closestTarget, closestDistance = nil, math.huge
-
-    for _, plot in ipairs(workspace:WaitForChild('Plots'):GetChildren()) do
-        if level == 1 then
-            local laserFolder = plot:FindFirstChild('Laser')
-            if laserFolder then
-                for _, laser in ipairs(laserFolder:GetChildren()) do
-                    if laser:IsA('Model') then
-                        local pos = getLaserCenter(laser)
-                        if pos and pos.Y <= 8 then
-                            local dist = (pos - hrp.Position).Magnitude
-                            if dist < closestDistance then
-                                closestDistance = dist
-                                closestTarget = laser
-                            end
+    if state then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer then
+                if not NAMETAG_SETTINGS.Connections[player] then
+                    NAMETAG_SETTINGS.Connections[player] = player.CharacterAdded:Connect(function()
+                        task.wait(1)
+                        if NAMETAG_SETTINGS.Enabled then
+                            CreateNameTag(player)
                         end
-                    end
+                    end)
+                end
+                if player.Character then
+                    CreateNameTag(player)
                 end
             end
-        elseif level == 2 then
-            if not fromThirdFloor then
-                local modelFolder = plot:FindFirstChild('Model')
-                local foundInitialTarget = false
-                if modelFolder then
-                    for _, obj in ipairs(modelFolder:GetChildren()) do
-                        if
-                            obj:IsA('BasePart')
-                            and isSizeClose(
-                                obj.Size,
-                                Vector3.new(5, 1, 1),
-                                0.01
-                            )
-                        then
-                            local dist = (obj.Position - hrp.Position).Magnitude
-                            if dist < 5 then
-                                if dist < closestDistance then
-                                    closestDistance = dist
-                                    closestTarget = obj
-                                    foundInitialTarget = true
+        end
+
+        Players.PlayerAdded:Connect(function(player)
+            if player ~= Players.LocalPlayer then
+                if not NAMETAG_SETTINGS.Connections[player] then
+                    NAMETAG_SETTINGS.Connections[player] = player.CharacterAdded:Connect(function()
+                        task.wait(1)
+                        if NAMETAG_SETTINGS.Enabled then
+                            CreateNameTag(player)
+                        end
+                    end)
+                end
+            end
+        end)
+    else
+        for player, tag in pairs(NAMETAG_SETTINGS.ActiveNameTags) do
+            if tag then
+                tag:Destroy()
+            end
+        end
+        NAMETAG_SETTINGS.ActiveNameTags = {}
+    end
+end
+
+-- WALLHACK функции
+local function createHighlight(character, player)
+    if wallHighlights[player] then
+        wallHighlights[player]:Destroy()
+        wallHighlights[player] = nil
+    end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Highlight"
+    highlight.Adornee = character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = WALLHACK_SETTINGS.FillColor
+    highlight.FillTransparency = WALLHACK_SETTINGS.FillTransparency
+    highlight.OutlineColor = WALLHACK_SETTINGS.OutlineColor
+    highlight.OutlineTransparency = WALLHACK_SETTINGS.OutlineTransparency
+    highlight.Archivable = true
+    highlight.Parent = character
+    
+    wallHighlights[player] = highlight
+    return highlight
+end
+
+local function onPlayerAdded(player)
+    if player == localPlayer then return end
+    
+    player.CharacterAdded:Connect(function(character)
+        if WALLHACK_SETTINGS.Enabled then
+            createHighlight(character, player)
+        end
+    end)
+    
+    if player.Character and WALLHACK_SETTINGS.Enabled then
+        createHighlight(player.Character, player)
+    end
+end
+
+local function onPlayerRemoving(player)
+    -- Очистка WallHack
+    if wallHighlights[player] then
+        wallHighlights[player]:Destroy()
+        wallHighlights[player] = nil
+    end
+    
+    -- Очистка NameTags
+    if NAMETAG_SETTINGS.ActiveNameTags[player] then
+        NAMETAG_SETTINGS.ActiveNameTags[player]:Destroy()
+        NAMETAG_SETTINGS.ActiveNameTags[player] = nil
+    end
+    
+    -- Очистка соединений
+    if NAMETAG_SETTINGS.Connections[player] then
+        NAMETAG_SETTINGS.Connections[player]:Disconnect()
+        NAMETAG_SETTINGS.Connections[player] = nil
+    end
+end
+
+local function reloadWallHack()
+    for player, highlight in pairs(wallHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    wallHighlights = {}
+    
+    if WALLHACK_SETTINGS.Enabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= localPlayer and player.Character then
+                createHighlight(player.Character, player)
+            end
+        end
+    end
+end
+
+-- TIMERESP функции
+local function updateTimerESP()
+    for _, timer in pairs(TIMERESP_SETTINGS.ActiveTimers) do
+        if timer and timer.Parent then
+            timer:Destroy()
+        end
+    end
+    TIMERESP_SETTINGS.ActiveTimers = {}
+
+    if not TIMERESP_SETTINGS.Enabled then
+        return
+    end
+
+    for _, plotInstance in ipairs(plot:GetChildren()) do
+        if plotInstance:FindFirstChild('PlotSign') and plotInstance:FindFirstChild('AnimalPodiums') then
+            for _, podium in ipairs(plotInstance.AnimalPodiums:GetChildren()) do
+                if podium:FindFirstChild('Base') and podium.Base:FindFirstChild('Spawn') then
+                    local spawn = podium.Base.Spawn
+                    if spawn:FindFirstChild('Attachment') then
+                        local attachment = spawn.Attachment
+                        if attachment:FindFirstChild('AnimalOverhead') then
+                            local overhead = attachment.AnimalOverhead
+                            if overhead:FindFirstChild('Timer') and overhead.Timer:IsA('TextLabel') then
+                                local timerText = overhead.Timer.Text
+                                if timerText ~= '' and timerText ~= 'Ready!' then
+                                    local billboard = Instance.new('BillboardGui')
+                                    billboard.Name = 'TimerESP'
+                                    billboard.Adornee = spawn
+                                    billboard.AlwaysOnTop = true
+                                    billboard.Size = UDim2.new(8, 0, 2, 0)
+                                    billboard.StudsOffset = Vector3.new(0, 3, 0)
+                                    billboard.MaxDistance = 500
+                                    billboard.Parent = spawn
+
+                                    local textLabel = Instance.new('TextLabel')
+                                    textLabel.Size = UDim2.new(1, 0, 1, 0)
+                                    textLabel.Text = timerText
+                                    textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                                    textLabel.TextStrokeTransparency = 0
+                                    textLabel.BackgroundTransparency = 1
+                                    textLabel.TextSize = 20
+                                    textLabel.Font = Enum.Font.TitilliumWeb
+                                    textLabel.TextScaled = false
+                                    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+                                    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+                                    textLabel.FontFace = Font.new(
+                                        'rbxasset://fonts/families/TitilliumWeb.json',
+                                        Enum.FontWeight.Bold,
+                                        Enum.FontStyle.Normal
+                                    )
+                                    textLabel.Parent = billboard
+
+                                    TIMERESP_SETTINGS.ActiveTimers[spawn] = billboard
                                 end
                             end
                         end
                     end
                 end
-                if not foundInitialTarget then
-                    local decorations = plot:FindFirstChild('Decorations')
-                    if decorations then
-                        for _, obj in ipairs(decorations:GetChildren()) do
-                            if
-                                obj:IsA('BasePart')
-                                and isSizeClose(
-                                    obj.Size,
-                                    Vector3.new(45, 45, 2),
-                                    0.01
-                                )
-                            then
-                                local posY = obj.Position.Y
-                                if posY >= 8 and posY <= 9.1 then
-                                    local dist = (obj.Position - hrp.Position).Magnitude
-                                    if dist < closestDistance then
-                                        closestDistance = dist
-                                        closestTarget = obj
-                                    end
-                                end
-                            end
-                        end
+            end
+        end
+    end
+end
+
+-- Основная функция инициализации
+local function initializeScript()
+    -- Инициализация WallHack
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            onPlayerAdded(player)
+        end
+    end
+    
+    Players.PlayerAdded:Connect(onPlayerAdded)
+    Players.PlayerRemoving:Connect(onPlayerRemoving)
+    
+    -- Инициализация NameTags
+    ToggleNameTags(NAMETAG_SETTINGS.Enabled)
+    
+    -- Инициализация TimerESP
+    local function updateTimerLoop()
+        while task.wait(1) do
+            if TIMERESP_SETTINGS.Enabled then
+                updateTimerESP()
+            end
+        end
+    end
+    task.spawn(updateTimerLoop)
+    
+    -- Инициализация BRAINROT ESP
+    local function updateBrainrotESP()
+        while task.wait(CONFIG.UPDATE_INTERVAL) do
+            if brainrotEnabled then
+                local bestSpawn, bestName, bestSalary, bestValue = findMostValuablePet()
+                
+                if bestSpawn then
+                    if bestValue >= lastBestValue * CONFIG.VALUE_THRESHOLD or bestSpawn ~= lastBestSpawn then
+                        createPetBillboard(bestSpawn, bestName, bestSalary)
+                        lastBestValue = bestValue
+                        lastBestSpawn = bestSpawn
                     end
+                else
+                    clearBillboards()
+                    lastBestValue = 0
+                    lastBestSpawn = nil
                 end
             else
-                local decorations = plot:FindFirstChild('Decorations')
-                if decorations then
-                    for _, obj in ipairs(decorations:GetChildren()) do
-                        if
-                            obj:IsA('BasePart')
-                            and isSizeClose(
-                                obj.Size,
-                                Vector3.new(17, 10, 2),
-                                0.01
-                            )
-                        then
-                            local dist = (obj.Position - hrp.Position).Magnitude
-                            if dist < closestDistance then
-                                closestDistance = dist
-                                closestTarget = obj
-                            end
-                        end
-                    end
-                end
-            end
-        elseif level == 3 then
-            local laserHitboxFolder = plot:FindFirstChild('LaserHitbox')
-            if laserHitboxFolder then
-                local thirdFloorPart =
-                    laserHitboxFolder:FindFirstChild('ThirdFloor')
-                if thirdFloorPart then
-                    local dist = (thirdFloorPart.Position - hrp.Position).Magnitude
-                    if dist < closestDistance then
-                        closestDistance = dist
-                        closestTarget = thirdFloorPart
-                    end
-                end
+                clearBillboards()
             end
         end
     end
-
-    return closestTarget
+    task.spawn(updateBrainrotESP)
 end
 
-local function moveToX410()
-    updateStatus('Moving to X=-410...')
-    local lv, attachment = setupFlight()
-    task.wait(0.2)
-
-    local targetX = -410
-    local targetY = hrp.Position.Y -- Сохраняем текущую высоту
-    local targetZ = hrp.Position.Z -- Сохраняем текущую позицию по Z
-    local targetPos = Vector3.new(targetX, targetY, targetZ)
-    local direction = (targetPos - hrp.Position)
-    local distance = direction.Magnitude
-    local speed = 25
-    local reached = false
-
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            return
+-- Очистка всех ESP при выходе игрока или респавне
+local function cleanupESP()
+    -- Очистка BRAINROT ESP
+    clearBillboards()
+    
+    -- Очистка WALLHACK
+    for player, highlight in pairs(wallHighlights) do
+        if highlight then
+            highlight:Destroy()
         end
-
-        local currentX = hrp.Position.X
-        if math.abs(currentX - targetX) <= 0.5 then
-            updateStatus('Reached X=-410')
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            return
-        end
-
-        -- Двигаемся только по оси X, сохраняя высоту и позицию по Z
-        local dir = (Vector3.new(targetX, targetY, targetZ) - hrp.Position)
-        if dir.Magnitude > 0 then
-            dir = dir.Unit
-            lv.VectorVelocity =
-                Vector3.new(dir.X * speed, 0, 0) -- Нулевая скорость по Y и Z
-            updateStatus(
-                'Moving to X=-410, distance: ' .. math.floor(dir.Magnitude)
-            )
-        else
-            lv.VectorVelocity = Vector3.zero
-        end
-    end)
-
-    while not reached do
-        task.wait(0.12)
     end
-
-    if not isMoving then
-        return
-    end
-
-    updateStatus('Starting smooth deceleration for X=-410')
-    lv, attachment = setupFlight()
-    for i = 1, 12 do
-        if not isMoving then
-            break
+    wallHighlights = {}
+    
+    -- Очистка NAMETAGS
+    for player, tag in pairs(NAMETAG_SETTINGS.ActiveNameTags) do
+        if tag then
+            tag:Destroy()
         end
-        local dir = (Vector3.new(targetX, targetY, targetZ) - hrp.Position)
-        if dir.Magnitude > 0 then
-            dir = dir.Unit
-            lv.VectorVelocity = Vector3.new(dir.X * speed, 0, 0)
-            updateStatus('Decelerating for X=-410, iteration: ' .. i)
-        else
-            lv.VectorVelocity = Vector3.zero
-        end
-        task.wait(0.05)
     end
-    lv:Destroy()
-
-    if not isMoving then
-        return
-    end
-
-    updateStatus('Cleaning up flight objects for X=-410')
-    task.delay(0.5, function()
-        if attachment then
-            attachment:Destroy()
+    NAMETAG_SETTINGS.ActiveNameTags = {}
+    
+    -- Очистка соединений NAMETAGS
+    for player, conn in pairs(NAMETAG_SETTINGS.Connections) do
+        if conn then
+            conn:Disconnect()
         end
-    end)
+    end
+    NAMETAG_SETTINGS.Connections = {}
+    
+    -- Очистка TIMERESP
+    for _, timer in pairs(TIMERESP_SETTINGS.ActiveTimers) do
+        if timer and timer.Parent then
+            timer:Destroy()
+        end
+    end
+    TIMERESP_SETTINGS.ActiveTimers = {}
 end
 
-local function main()
-    if isMoving then
-        updateStatus('Stopping...')
-        isMoving = false
-        actionBtn.Text = 'START'
-        actionBtn.BackgroundColor3 = mainColor
-        return
-    end
+-- Обработка выхода/респавна локального игрока
+localPlayer.CharacterRemoving:Connect(function()
+    cleanupESP()
+end)
 
-    isMoving = true
-    actionBtn.Text = 'STOP'
-    actionBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-    updateStatus('Starting movement sequence...')
+localPlayer.CharacterAdded:Connect(function(character)
+    task.wait(2) -- Ждем полной загрузки персонажа
+    cleanupESP()
+    initializeScript()
+end)
 
-    -- Двигаемся к X=-410 без изменения высоты
-    moveToX410()
+-- Запуск скрипта
+initializeScript()
 
-    if not isMoving then
-        return
-    end
-
-    -- Продолжаем с остальной логикой...
-    -- [Остальной код остается без изменений]
-end
-
--- === BUTTON CLICK HANDLER ===
-actionBtn.MouseButton1Click:Connect(main)
-
--- === CLEANUP ON SCRIPT TERMINATION ===
-table.insert(
-    activeConnections,
-    player.CharacterRemoving:Connect(function()
-        if isMoving then
-            isMoving = false
-            actionBtn.Text = 'START'
-            actionBtn.BackgroundColor3 = mainColor
-            updateStatus('Character removed, stopping...')
-        end
-    end)
-)
-
-table.insert(
-    activeConnections,
-    game:GetService('UserInputService').WindowFocusReleased:Connect(function()
-        if isMoving then
-            isMoving = false
-            actionBtn.Text = 'START'
-            actionBtn.BackgroundColor3 = mainColor
-            updateStatus('Window focus lost, stopping...')
-        end
-    end)
-)
-
--- === INITIAL STATUS ===
-updateStatus('Ready to work')
+print("All ESP features loaded successfully!")
+print("Features: BRAINROT ESP, WALLHACK, NAMETAGS, TIMERESP")
+print("Auto-cleanup on respawn/exit enabled")
