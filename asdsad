@@ -108,7 +108,7 @@ local function applySpeedBoost(character)
     end
 end
 
--- Функция для смены персонажа
+-- Функция для сменя персонажа
 local function swapCharacter(targetPlayer)
     local localPlayer = Players.LocalPlayer
 
@@ -183,9 +183,9 @@ screenGui.Parent = player:WaitForChild('PlayerGui')
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основное меню
+-- Основное меню (уменьшенный размер)
 local mainFrame = Instance.new('Frame')
-mainFrame.Size = UDim2.new(0, 250, 0, 150)
+mainFrame.Size = UDim2.new(0, 200, 0, 120) -- Уменьшенный размер
 mainFrame.Position = UDim2.new(0, 10, 0, 10)
 mainFrame.BackgroundColor3 = mainColor
 mainFrame.BorderSizePixel = 0
@@ -205,7 +205,7 @@ mainFrameCorner.Parent = mainFrame
 
 -- Title bar
 local titleBar = Instance.new('Frame')
-titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.Size = UDim2.new(1, 0, 0, 25) -- Уменьшенная высота
 titleBar.Position = UDim2.new(0, 0, 0, 0)
 titleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 titleBar.BorderSizePixel = 0
@@ -222,25 +222,25 @@ title.BackgroundTransparency = 1
 title.Text = 'Control Player'
 title.TextColor3 = accentColor
 title.Font = Enum.Font.SciFi
-title.TextSize = 16
+title.TextSize = 14 -- Уменьшенный размер текста
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleBar
 
 local contentFrame = Instance.new('Frame')
-contentFrame.Size = UDim2.new(1, -20, 1, -40)
-contentFrame.Position = UDim2.new(0, 10, 0, 35)
+contentFrame.Size = UDim2.new(1, -20, 1, -35) -- Подогнано под кнопку
+contentFrame.Position = UDim2.new(0, 10, 0, 30) -- Сдвинуто вниз
 contentFrame.BackgroundTransparency = 1
 contentFrame.Parent = mainFrame
 
 -- Кружок для открытия/закрытия меню
 local toggleCircle = Instance.new('TextButton')
-toggleCircle.Size = UDim2.new(0, 40, 0, 40)
-toggleCircle.Position = UDim2.new(1, -50, 0, 10) -- Правый верхний угол
+toggleCircle.Size = UDim2.new(0, 35, 0, 35) -- Уменьшенный размер
+toggleCircle.Position = UDim2.new(1, -45, 0, 10) -- Правый верхний угол
 toggleCircle.AnchorPoint = Vector2.new(1, 0)
 toggleCircle.BackgroundColor3 = mainColor
 toggleCircle.Text = "⚙️"
 toggleCircle.TextColor3 = accentColor
-toggleCircle.TextSize = 20
+toggleCircle.TextSize = 16 -- Уменьшенный размер текста
 toggleCircle.Parent = screenGui
 
 local toggleCircleCorner = Instance.new('UICorner')
@@ -316,14 +316,14 @@ end)
 
 -- Start button
 local startButton = Instance.new('TextButton')
-startButton.Size = UDim2.new(1, 0, 0, 40)
+startButton.Size = UDim2.new(1, 0, 0, 35) -- Уменьшенная высота
 startButton.Position = UDim2.new(0, 0, 0, 0)
 startButton.BackgroundColor3 = mainColor
 startButton.BorderSizePixel = 0
 startButton.Text = 'START'
 startButton.TextColor3 = textColor
 startButton.Font = Enum.Font.SciFi
-startButton.TextSize = 20
+startButton.TextSize = 16 -- Уменьшенный размер текста
 startButton.Parent = contentFrame
 
 local startButtonCorner = Instance.new('UICorner')
@@ -376,7 +376,7 @@ startButton.MouseButton1Click:Connect(function()
             swapCharacter(nearestPlayer)
 
             -- Изменяем текст кнопки на таймер
-            startButton.Text = '⏳ 10сек...'
+            startButton.Text = '⏳ 10s...'
             startButton.TextColor3 = accentColor
             startButtonStroke.Color = accentColor
             startButton.Active = false
@@ -387,7 +387,7 @@ startButton.MouseButton1Click:Connect(function()
                 while timer > 0 do
                     wait(1)
                     timer = timer - 1
-                    startButton.Text = '⏳ ' .. timer .. 'сек...'
+                    startButton.Text = '⏳ ' .. timer .. 's...'
                 end
 
                 -- Возвращаем к оригинальному персонажу
