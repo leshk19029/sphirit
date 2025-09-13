@@ -9,6 +9,8 @@ local originalCharacter = nil
 local originalCameraSettings = {}
 local isControlling = false
 local countdownCoroutine = nil
+local currentTools = {} -- Для хранения текущих инструментов
+local originalHumanoidState = nil -- Для хранения исходного состояния гуманоида
 
 -- Функция для изменения WebRopes
 local function modifyWebRopes()
@@ -25,6 +27,88 @@ local function modifyWebRopes()
     return modifiedCount
 end
 
+-- Функция для убирания всех инструментов из рук
+local function unequipAllTools()
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then return end
+    
+    local backpack = localPlayer:FindFirstChild('Backpack')
+    if not backpack then return end
+    
+    -- Сохраняем текущие инструменты и убираем их
+    currentTools = {}
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA('Tool') then
+            table.insert(currentTools, tool)
+            tool.Parent = backpack
+        end
+    end
+end
+
+-- Функция для возврата инструментов в руки
+local function reequipTools()
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then return end
+    
+    for _, tool in ipairs(currentTools) do
+        if tool and tool.Parent then
+            tool.Parent = character
+        end
+    end
+    currentTools = {}
+end
+
+-- Функция для заморозки оригинального персонажа
+local function freezeOriginalCharacter(character)
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild('Humanoid')
+    if not humanoid then return end
+    
+    -- Сохраняем исходное состояние
+    originalHumanoidState = {
+        WalkSpeed = humanoid.WalkSpeed,
+        JumpPower = humanoid.JumpPower,
+        PlatformStand = humanoid.PlatformStand
+    }
+    
+    -- Замораживаем персонажа
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    humanoid.PlatformStand = true -- Это предотвращает движение
+    
+    -- Отключаем все движения
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA('BasePart') then
+            part.Anchored = true
+        end
+    end
+end
+
+-- Функция для разморозки оригинального персонажа
+local function unfreezeOriginalCharacter(character)
+    if not character or not originalHumanoidState then return end
+    
+    local humanoid = character:FindFirstChild('Humanoid')
+    if not humanoid then return end
+    
+    -- Восстанавливаем состояние гуманоида
+    humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
+    humanoid.JumpPower = originalHumanoidState.JumpPower
+    humanoid.PlatformStand = originalHumanoidState.PlatformStand
+    
+    -- Включаем движения обратно
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA('BasePart') then
+            part.Anchored = false
+        end
+    end
+    
+    originalHumanoidState = nil
+end
+
 -- Функция для проверки и взятия Web Slinger в руки
 local function ensureWebSlingerInHands()
     local localPlayer = Players.LocalPlayer
@@ -38,43 +122,37 @@ local function ensureWebSlingerInHands()
         return false
     end
 
-    -- Сначала проверяем, есть ли уже Web Slinger в руках
-    for _, tool in ipairs(character:GetChildren()) do
-        if tool:IsA('Tool') and tool.Name:lower():find('web') then
-            return true -- Уже в руках
+    -- Убираем все текущие инструменты из рук
+    unequipAllTools()
+
+    -- Ищем Web Slinger в инвентаре (гибкий поиск)
+    local webSlinger = nil
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger') or item.Name:lower():find('shooter')) then
+            webSlinger = item
+            break
         end
     end
 
-    -- Ищем Web Slinger в инвентаре (более гибкий поиск)
-    local webSlinger = nil
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger')) then
-            webSlinger = item
-            break
+    -- Если не нашли, пробуем другие варианты названий
+    if not webSlinger then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA('Tool') and item.Name:lower():find('swing') then
+                webSlinger = item
+                break
+            end
         end
     end
 
     -- Если нашли Web Slinger, берем его в руки
     if webSlinger then
         webSlinger.Parent = character
-        wait(0.1) -- Даем время для перемещения
+        wait(0.2) -- Даем время для перемещения
         return true
     end
 
-    -- Если не нашли, пробуем найти по другому названию
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA('Tool') and item.Name:lower():find('shooter') then
-            webSlinger = item
-            break
-        end
-    end
-
-    if webSlinger then
-        webSlinger.Parent = character
-        wait(0.1)
-        return true
-    end
-
+    -- Если не нашли Web Slinger, возвращаем инструменты обратно
+    reequipTools()
     warn("Web Slinger не найден в инвентаре!")
     return false
 end
@@ -123,6 +201,7 @@ local function findShotPlayer()
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             
+            -- Если у игрока PlatformStand включен, значит мы в него выстрелили
             if humanoid and humanoid.PlatformStand then
                 return player
             end
@@ -152,6 +231,9 @@ local function swapCharacter(targetPlayer)
         CameraType = workspace.CurrentCamera.CameraType,
         CameraSubject = workspace.CurrentCamera.CameraSubject,
     }
+
+    -- Замораживаем оригинального персонажа
+    freezeOriginalCharacter(originalCharacter)
 
     -- Отключаем PlatformStand у цели
     disablePlatformStand(targetPlayer)
@@ -185,11 +267,17 @@ local function returnToOriginalCharacter()
     -- Возвращаем оригинального персонажа
     localPlayer.Character = originalCharacter
 
+    -- Размораживаем оригинального персонажа
+    unfreezeOriginalCharacter(originalCharacter)
+
     -- Восстанавливаем камеру
     workspace.CurrentCamera.CameraType = originalCameraSettings.CameraType
     if originalCharacter:FindFirstChild('Humanoid') then
         workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
     end
+
+    -- Возвращаем инструменты в руки
+    reequipTools()
 
     -- Очищаем переменные
     originalCharacter = nil
@@ -308,9 +396,9 @@ controlButton.MouseButton1Click:Connect(function()
         controlButtonStroke.Color = borderColor
     else
         -- Показываем, что идет поиск Web Slinger
-        controlButton.Text = 'Searching Web...'
+        controlButton.Text = 'Taking Web...'
         
-        -- Проверяем и берем Web Slinger в руки
+        -- Проверяем и берем Web Slinger в руки (убирая другие инструменты)
         if not ensureWebSlingerInHands() then
             controlButton.Text = 'Control Player'
             warn("Web Slinger не найден!")
@@ -335,14 +423,15 @@ controlButton.MouseButton1Click:Connect(function()
                     targetRoot
                 )
 
-                -- Ждем немного после выстрела
-                wait(0.5)
+                -- Ждем и проверяем, попали ли мы
+                controlButton.Text = 'Checking hit...'
                 
-                -- Ищем игрока, в которого мы выстрелили
+                -- Ждем 1 секунду и проверяем попадание
+                wait(1)
                 local shotPlayer = findShotPlayer()
                 
                 if shotPlayer then
-                    -- Меняем персонажа
+                    -- Попали! Меняем персонажа
                     swapCharacter(shotPlayer)
                     isControlling = true
 
@@ -371,15 +460,19 @@ controlButton.MouseButton1Click:Connect(function()
 
                     coroutine.resume(countdownCoroutine)
                 else
-                    warn("Не удалось найти игрока, в которого выстрелили")
+                    warn("Промах! Не попали в игрока")
+                    -- Возвращаем инструменты обратно
+                    reequipTools()
                     controlButton.Text = 'Control Player'
                 end
             else
                 warn("У игрока нет HumanoidRootPart")
+                reequipTools()
                 controlButton.Text = 'Control Player'
             end
         else
             warn("Ближайший игрок не найден или вне радиуса")
+            reequipTools()
             controlButton.Text = 'Control Player'
         end
     end
@@ -389,11 +482,15 @@ end)
 player.CharacterRemoving:Connect(function()
     if isControlling then
         returnToOriginalCharacter()
+    else
+        reequipTools()
     end
 end)
 
 screenGui.Destroying:Connect(function()
     if isControlling then
         returnToOriginalCharacter()
+    else
+        reequipTools()
     end
 end)
