@@ -43,7 +43,7 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Создаем кружочек для открытия/закрытия меню
 local toggleButton = Instance.new('TextButton')
-toggleButton.Size = UDim2.new(0, 51, 0, 51)
+toggleButton.Size = UDim2.new(0, 60, 0, 60)
 toggleButton.Position = UDim2.new(0, 10, 0, 10)
 toggleButton.BackgroundColor3 = mainColor
 toggleButton.BorderSizePixel = 0
@@ -265,27 +265,31 @@ local function startSpeedBoost()
     end
 
     local func = loadSpeedBoost()
-    if func and type(func) == 'function' then
-        local success, result = pcall(func)
-        if success then
-            speedBoostCleanup = result
-            functionStates.SpeedBoost = true
-            return true
-        else
-            warn('SpeedBoost execution failed:', result)
-            return false
-        end
+    if func then
+        -- Скрипт скорости уже выполнился при загрузке, просто отмечаем как активный
+        functionStates.SpeedBoost = true
+        return true
     else
+        warn('SpeedBoost loading failed')
         return false
     end
 end
 
 local function stopSpeedBoost()
-    if speedBoostCleanup and type(speedBoostCleanup) == 'function' then
-        pcall(speedBoostCleanup)
-        speedBoostCleanup = nil
-    end
+    -- Для speed-boost мы не можем "остановить" выполненный код, 
+    -- но можем перезагрузить персонажа или сбросить скорость
     functionStates.SpeedBoost = false
+    
+    -- Попытка сбросить скорость персонажа
+    pcall(function()
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild('Humanoid')
+            if humanoid then
+                humanoid.WalkSpeed = 16 -- Стандартная скорость
+            end
+        end
+    end)
 end
 
 -- Anti-Effects functionality
@@ -348,11 +352,10 @@ local function startESP()
 
             if success then
                 functionStates.ESP = true
-                return true
             else
                 stopESP()
-                return false
             end
+            return success
         end
     end
     return false
