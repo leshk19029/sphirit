@@ -1,987 +1,128 @@
 local Players = game:GetService('Players')
-local RunService = game:GetService('RunService')
-local UserInputService = game:GetService('UserInputService')
-local ReplicatedStorage = game:GetService('ReplicatedStorage')
-local ProximityPromptService = game:GetService('ProximityPromptService')
 local TweenService = game:GetService('TweenService')
+local UserInputService = game:GetService('UserInputService')
+local RunService = game:GetService('RunService')
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild('PlayerGui')
 local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild('HumanoidRootPart')
+local humanoid = character:WaitForChild('Humanoid')
 
--- Script states
-local isActive = false
-local isMoving = false
-local promptTriggered = false
-local armCheckConnection = nil
-local promptConnection = nil
-local activeConnections = {}
-local screenGui = nil
+-- Создаем основной GUI
+local ScreenGui = Instance.new('ScreenGui')
+ScreenGui.Name = 'SpeedControl'
+ScreenGui.Parent = player.PlayerGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Цвета для нового стиля
-local mainColor = Color3.fromRGB(25, 25, 25)
-local accentColor = Color3.fromRGB(0, 255, 140)
-local textColor = Color3.fromRGB(255, 255, 255)
-local borderColor = Color3.fromRGB(50, 50, 50)
+-- Основная кнопка
+local controlButton = Instance.new('TextButton')
+controlButton.Size = UDim2.new(0, 150, 0, 40)
+controlButton.Position = UDim2.new(0, 10, 0, 10)
+controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+controlButton.BorderSizePixel = 0
+controlButton.Text = 'SPEED: OFF'
+controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+controlButton.Font = Enum.Font.Code
+controlButton.TextSize = 14
+controlButton.Parent = ScreenGui
 
--- === REDESIGNED MENU ===
-local function createMenu()
-    if screenGui and screenGui.Parent then
-        screenGui:Destroy()
-    end
+local controlButtonCorner = Instance.new('UICorner')
+controlButtonCorner.CornerRadius = UDim.new(0, 6)
+controlButtonCorner.Parent = controlButton
 
-    screenGui = Instance.new('ScreenGui')
-    screenGui.Name = 'ForestSpiritControl'
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local controlButtonStroke = Instance.new('UIStroke')
+controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
+controlButtonStroke.Thickness = 2
+controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
+controlButtonStroke.Parent = controlButton
 
-    local mainFrame = Instance.new('Frame')
-    mainFrame.Size = UDim2.new(0, 292, 0, 150)
-    mainFrame.Position = UDim2.new(0.5, -625, 0.3, 0)
-    mainFrame.BackgroundColor3 = mainColor
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = screenGui
+-- Переменные состояния
+local speedEnabled = false
+local currentSpeed = 25
+local dragInput, dragStart, startPos
 
-    local uiCorner = Instance.new('UICorner')
-    uiCorner.CornerRadius = UDim.new(0, 6)
-    uiCorner.Parent = mainFrame
-
-    local mainShadow = Instance.new('UIStroke')
-    mainShadow.Thickness = 2
-    mainShadow.Color = borderColor
-    mainShadow.LineJoinMode = Enum.LineJoinMode.Round
-    mainShadow.Parent = mainFrame
-
-    local headerFrame = Instance.new('Frame')
-    headerFrame.Size = UDim2.new(1, 0, 0, 33)
-    headerFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    headerFrame.BorderSizePixel = 0
-    headerFrame.Parent = mainFrame
-
-    local headerCorner = Instance.new('UICorner')
-    headerCorner.CornerRadius = UDim.new(0, 6)
-    headerCorner.Parent = headerFrame
-
-    local headerLabel = Instance.new('TextLabel')
-    headerLabel.Size = UDim2.new(1, 0, 1, 0)
-    headerLabel.BackgroundTransparency = 1
-    headerLabel.Text = 'Auto-Steal v2'
-    headerLabel.TextColor3 = accentColor
-    headerLabel.TextSize = 15
-    headerLabel.Font = Enum.Font.Code
-    headerLabel.Parent = headerFrame
-
-    local statusPanel = Instance.new('Frame')
-    statusPanel.Size = UDim2.new(1, -17, 0, 50)
-    statusPanel.Position = UDim2.new(0, 8, 0, 42)
-    statusPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    statusPanel.BorderSizePixel = 0
-    statusPanel.Parent = mainFrame
-
-    local statusCorner = Instance.new('UICorner')
-    statusCorner.CornerRadius = UDim.new(0, 6)
-    statusCorner.Parent = statusPanel
-
-    local statusLabel = Instance.new('TextLabel')
-    statusLabel.Size = UDim2.new(1, -8, 1, -8)
-    statusLabel.Position = UDim2.new(0, 4, 0, 4)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = 'Press START to begin'
-    statusLabel.TextColor3 = textColor
-    statusLabel.TextSize = 16
-    statusLabel.Font = Enum.Font.Code
-    statusLabel.TextWrapped = true
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = statusPanel
-
-    local buttonsFrame = Instance.new('Frame')
-    buttonsFrame.Size = UDim2.new(1, -17, 0, 42)
-    buttonsFrame.Position = UDim2.new(0, 8, 0, 100)
-    buttonsFrame.BackgroundTransparency = 1
-    buttonsFrame.Parent = mainFrame
-
-    local actionBtn = Instance.new('TextButton')
-    actionBtn.Size = UDim2.new(1, 0, 1, 0)
-    actionBtn.BackgroundColor3 = mainColor
-    actionBtn.Text = 'START'
-    actionBtn.TextColor3 = textColor
-    actionBtn.TextSize = 18
-    actionBtn.Font = Enum.Font.Code
-    actionBtn.Parent = buttonsFrame
-
-    local actionCorner = Instance.new('UICorner')
-    actionCorner.CornerRadius = UDim.new(0, 6)
-    actionCorner.Parent = actionBtn
-
-    local btnStroke = Instance.new('UIStroke')
-    btnStroke.Thickness = 2
-    btnStroke.Color = borderColor
-    btnStroke.LineJoinMode = Enum.LineJoinMode.Round
-    btnStroke.Parent = actionBtn
-
-    -- Эффекты при наведении
-    actionBtn.MouseEnter:Connect(function()
-        TweenService:Create(
-            actionBtn,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-        ):Play()
-    end)
-
-    actionBtn.MouseLeave:Connect(function()
-        TweenService:Create(
-            actionBtn,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = mainColor}
-        ):Play()
-    end)
-
-    -- === DRAGGABLE FUNCTIONALITY ===
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-
-    headerFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
+-- Функция для применения скорости
+local function applyVelocity()
+    if speedEnabled and character and humanoid then
+        local rootPart = character:FindFirstChild('HumanoidRootPart')
+        if rootPart then
+            local moveDirection = humanoid.MoveDirection
+            if moveDirection.Magnitude > 0 then
+                local velocity = moveDirection * currentSpeed
+                rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
+            end
         end
-    end)
-
-    headerFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if
-            dragging
-            and input.UserInputType == Enum.UserInputType.MouseMovement
-        then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    return statusLabel, actionBtn, mainFrame
-end
-
--- === FUNCTION TO UPDATE STATUS LABEL ===
-local function updateStatus(text)
-    if statusLabel then
-        statusLabel.Text = text
     end
 end
 
-local statusLabel, actionBtn, mainFrame = createMenu()
+-- Функция перетаскивания
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    local newX = startPos.X.Offset + delta.X
+    local newY = startPos.Y.Offset + delta.Y
 
--- === RESET STATUS ON CHARACTER RESPAWN ===
-table.insert(
-    activeConnections,
-    player.CharacterAdded:Connect(function(newCharacter)
-        character = newCharacter
-        hrp = newCharacter:WaitForChild('HumanoidRootPart')
-        updateStatus('Ready to work')
-    end)
-)
+    newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
+    newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
 
--- === SCRIPT FUNCTIONALITY ===
-local function FindDelivery()
-    local plots = workspace:FindFirstChild('Plots')
-    if not plots then
-        warn('Plots folder not found in workspace')
-        return
-    end
-    for _, plot in pairs(plots:GetChildren()) do
-        local sign = plot:FindFirstChild('PlotSign')
-        if sign then
-            local yourBase = sign:FindFirstChild('YourBase')
-            if yourBase and yourBase.Enabled then
-                local hitbox = plot:FindFirstChild('DeliveryHitbox')
-                if hitbox then
-                    return hitbox
-                end
-            end
-        end
-    end
-    warn('No valid DeliveryHitbox found')
+    controlButton.Position = UDim2.new(0, newX, 0, newY)
 end
 
-local function setupFlight()
-    if hrp:FindFirstChild('FlightAttachment') then
-        hrp.FlightAttachment:Destroy()
-    end
-    if hrp:FindFirstChildOfClass('LinearVelocity') then
-        hrp:FindFirstChildOfClass('LinearVelocity'):Destroy()
-    end
-
-    local attachment = Instance.new('Attachment')
-    attachment.Name = 'FlightAttachment'
-    attachment.Parent = hrp
-
-    local lv = Instance.new('LinearVelocity')
-    lv.Attachment0 = attachment
-    lv.RelativeTo = Enum.ActuatorRelativeTo.World
-    lv.MaxForce = math.huge
-    lv.Name = 'FlightVelocity'
-    lv.Parent = hrp
-    return lv, attachment
-end
-
-local function moveToDelivery()
-    local targetHitbox = FindDelivery()
-    if not targetHitbox then
-        warn('No target to move towards')
-        updateStatus('No delivery target found')
-        return
-    end
-
-    for _, obj in ipairs(hrp:GetChildren()) do
-        if obj:IsA('LinearVelocity') or obj:IsA('Attachment') then
-            obj:Destroy()
-        end
-    end
-
-    local lv, attachment = setupFlight()
-    updateStatus('Flying to delivery...')
-    task.wait(0.2)
-
-    local speed = 25
-    local reached = false
-    local maxTime = 8
-    local startTime = tick()
-
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            return
-        end
-
-        if not targetHitbox or not targetHitbox:IsDescendantOf(workspace) then
-            warn('Target lost during flight')
-            updateStatus('Delivery target lost')
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            return
-        end
-
-        local targetPos = targetHitbox.Position - Vector3.new(0, 6, 0)
-        local direction = (targetPos - hrp.Position)
-        local distance = direction.Magnitude
-
-        if distance <= 0.5 then
-            updateStatus(
-                'Reached delivery target, distance: ' .. math.floor(distance)
-            )
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            local humanoid = character:FindFirstChild('Humanoid')
-            if humanoid then
-                humanoid.PlatformStand = false
-                updateStatus('PlatformStand disabled')
-            end
-            return
-        end
-
-        if tick() - startTime >= maxTime then
-            warn('Timeout before reaching delivery target')
-            updateStatus('Timeout during delivery')
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reached = true
-            return
-        end
-
-        local unitDir = direction.Unit
-        lv.VectorVelocity =
-            Vector3.new(unitDir.X * speed, unitDir.Y * speed, unitDir.Z * speed)
-        updateStatus('Moving to delivery, distance: ' .. math.floor(distance))
-    end)
-
-    while not reached do
-        task.wait(0.12)
-    end
-
-    if not isMoving then
-        return
-    end
-
-    updateStatus('Starting smooth deceleration for delivery')
-    lv, attachment = setupFlight()
-    for i = 1, 12 do
-        if not isMoving then
-            break
-        end
-        local dir = (
-            targetHitbox.Position
-            - Vector3.new(0, 6, 0)
-            - hrp.Position
-        )
-        if dir.Magnitude > 0 then
-            dir = dir.Unit
-            lv.VectorVelocity =
-                Vector3.new(dir.X * speed, dir.Y * speed, dir.Z * speed)
-            updateStatus('Decelerating for delivery, iteration: ' .. i)
-        else
-            lv.VectorVelocity = Vector3.zero
-        end
-        task.wait(0.05)
-    end
-    lv:Destroy()
-
-    if not isMoving then
-        return
-    end
-
-    updateStatus('Starting smooth descent for delivery')
-    lv, attachment = setupFlight()
-    local targetY = targetHitbox.Position.Y - 6 + 2.5
-    local reachedY = false
-    connection = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reachedY = true
-            return
-        end
-
-        if hrp.Position.Y <= targetY then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            connection:Disconnect()
-            reachedY = true
-            local humanoid = character:FindFirstChild('Humanoid')
-            if humanoid then
-                humanoid.PlatformStand = false
-                updateStatus('PlatformStand disabled')
-            end
-            return
-        end
-        lv.VectorVelocity = Vector3.new(0, -speed, 0)
-        updateStatus(
-            'Descending for delivery, current Y: ' .. math.floor(hrp.Position.Y)
-        )
-    end)
-
-    while not reachedY do
-        task.wait(0.05)
-    end
-
-    updateStatus('Cleaning up delivery objects')
-    task.delay(0.5, function()
-        if attachment then
-            attachment:Destroy()
-        end
-        if isMoving then
-            updateStatus('Idle')
-            isMoving = false
-            actionBtn.Text = 'START'
-            actionBtn.BackgroundColor3 = mainColor
-        end
-    end)
-end
-
-local function getLaserCenter(model)
-    if not model:IsA('Model') then
-        return nil
-    end
-    local primary = model.PrimaryPart
-        or model:FindFirstChildWhichIsA('BasePart')
-    if not primary then
-        return nil
-    end
-    return primary.Position
-end
-
-local function isSizeClose(partSize, targetSize, tolerance)
-    return math.abs(partSize.X - targetSize.X) <= tolerance
-        and math.abs(partSize.Y - targetSize.Y) <= tolerance
-        and math.abs(partSize.Z - targetSize.Z) <= tolerance
-end
-
-local function getTargetForFloor(level, fromThirdFloor)
-    local closestTarget, closestDistance = nil, math.huge
-
-    for _, plot in ipairs(workspace:WaitForChild('Plots'):GetChildren()) do
-        if level == 1 then
-            local laserFolder = plot:FindFirstChild('Laser')
-            if laserFolder then
-                for _, laser in ipairs(laserFolder:GetChildren()) do
-                    if laser:IsA('Model') then
-                        local pos = getLaserCenter(laser)
-                        if pos and pos.Y <= 8 then
-                            local dist = (pos - hrp.Position).Magnitude
-                            if dist < closestDistance then
-                                closestDistance = dist
-                                closestTarget = laser
-                            end
-                        end
-                    end
-                end
-            end
-        elseif level == 2 then
-            if not fromThirdFloor then
-                local modelFolder = plot:FindFirstChild('Model')
-                local foundInitialTarget = false
-                if modelFolder then
-                    for _, obj in ipairs(modelFolder:GetChildren()) do
-                        if
-                            obj:IsA('BasePart')
-                            and isSizeClose(
-                                obj.Size,
-                                Vector3.new(5, 1, 1),
-                                0.01
-                            )
-                        then
-                            local dist = (obj.Position - hrp.Position).Magnitude
-                            if dist < 5 then
-                                if dist < closestDistance then
-                                    closestDistance = dist
-                                    closestTarget = obj
-                                    foundInitialTarget = true
-                                end
-                            end
-                        end
-                    end
-                end
-                if not foundInitialTarget then
-                    local decorations = plot:FindFirstChild('Decorations')
-                    if decorations then
-                        for _, obj in ipairs(decorations:GetChildren()) do
-                            if
-                                obj:IsA('BasePart')
-                                and isSizeClose(
-                                    obj.Size,
-                                    Vector3.new(45, 45, 2),
-                                    0.01
-                                )
-                            then
-                                local posY = obj.Position.Y
-                                if posY >= 8 and posY <= 9.1 then
-                                    local dist = (obj.Position - hrp.Position).Magnitude
-                                    if dist < closestDistance then
-                                        closestDistance = dist
-                                        closestTarget = obj
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            else
-                local decorations = plot:FindFirstChild('Decorations')
-                if decorations then
-                    for _, obj in ipairs(decorations:GetChildren()) do
-                        if
-                            obj:IsA('BasePart')
-                            and isSizeClose(
-                                obj.Size,
-                                Vector3.new(17, 10, 2),
-                                0.01
-                            )
-                        then
-                            local dist = (obj.Position - hrp.Position).Magnitude
-                            if dist < closestDistance then
-                                closestDistance = dist
-                                closestTarget = obj
-                            end
-                        end
-                    end
-                end
-            end
-        elseif level == 3 then
-            local laserHitboxFolder = plot:FindFirstChild('LaserHitbox')
-            if laserHitboxFolder then
-                local thirdFloorPart =
-                    laserHitboxFolder:FindFirstChild('ThirdFloor')
-                if thirdFloorPart then
-                    local dist = (thirdFloorPart.Position - hrp.Position).Magnitude
-                    if dist < closestDistance then
-                        closestDistance = dist
-                        closestTarget = thirdFloorPart
-                    end
-                end
-            end
-        end
-    end
-
-    return closestTarget
-end
-
-local function getTargetPosition(target)
-    if target:IsA('Model') then
-        return getLaserCenter(target)
-    elseif target:IsA('BasePart') then
-        local pos = target.Position
-        if isSizeClose(target.Size, Vector3.new(17, 10, 2), 0.01) then
-            local zOffset = hrp.Position.X > -410 and 5 or -5
-            pos = pos + Vector3.new(0, 0, zOffset)
-        end
-        return pos
-    else
-        return nil
-    end
-end
-
-local function moveUntil(conditionFunc, directionFunc, callback)
-    local speed = 25
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            hrp.Velocity = Vector3.zero
-            conn:Disconnect()
-            return
-        end
-
-        if conditionFunc() then
-            hrp.Velocity = Vector3.zero
-            conn:Disconnect()
-            if callback then
-                callback()
-            end
-        else
-            local dir = directionFunc()
-            if dir.Magnitude > 0 then
-                dir = dir.Unit
-                hrp.Velocity =
-                    Vector3.new(dir.X * speed, hrp.Velocity.Y, dir.Z * speed)
-            else
-                hrp.Velocity = Vector3.zero
-            end
-        end
-    end)
-    table.insert(activeConnections, conn)
-end
-
-local function moveUntilLinear(conditionFunc, directionFunc, callback)
-    local lv, attachment = setupFlight()
-    local speed = 25
-    local currentY = hrp.Position.Y
-    local level = currentY <= 8 and 1 or (currentY <= 24 and 2 or 3)
-
-    local targetX = -410
-    local startY = hrp.Position.Y
-    local targetY = startY / 2
-    local descentSpeed = 25
-    local isDescending = false
-
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            attachment:Destroy()
-            conn:Disconnect()
-            return
-        end
-
-        if conditionFunc() then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            attachment:Destroy()
-            conn:Disconnect()
-            if callback then
-                callback()
-            end
-        else
-            local dir = directionFunc()
-            if dir.Magnitude > 0 then
-                dir = dir.Unit
-
-                local verticalVelocity = 0
-                if (level == 2 or level == 3) and hrp.Position.Y > targetY then
-                    verticalVelocity = -descentSpeed
-                    isDescending = true
-                end
-
-                lv.VectorVelocity =
-                    Vector3.new(dir.X * speed, verticalVelocity, dir.Z * speed)
-            else
-                lv.VectorVelocity = Vector3.zero
-            end
-
-            if isDescending then
-                updateStatus(
-                    'Moving to X = -410, descending: '
-                        .. math.floor(hrp.Position.Y)
-                        .. ' -> '
-                        .. math.floor(targetY)
-                )
-            else
-                updateStatus(
-                    'Moving to X = -410, height: ' .. math.floor(hrp.Position.Y)
-                )
-            end
-        end
-    end)
-    table.insert(activeConnections, conn)
-end
-
-local function moveToTarget(target, level, fromThirdFloor)
-    local pos = getTargetPosition(target)
-    if not pos then
-        warn('Invalid target position')
-        updateStatus('Invalid target')
-        isMoving = false
-        actionBtn.Text = 'START'
-        actionBtn.BackgroundColor3 = mainColor
-        return
-    end
-
-    local tolerance = 2
-    updateStatus('Moving to target at ' .. tostring(pos))
-
-    -- Создаем velocity для движения
-    local lv, attachment = setupFlight()
-    local speed = 25
-
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not isMoving then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            attachment:Destroy()
-            conn:Disconnect()
-            return
-        end
-
-        -- Проверяем достижение цели
-        local reached = false
-        if level == 1 or (level == 2 and fromThirdFloor) then
-            local charPos = hrp.Position
-            local dx = math.abs(charPos.X - pos.X)
-            local dz = math.abs(charPos.Z - pos.Z)
-            reached = dx < tolerance and dz < tolerance
-        elseif level == 2 then
-            reached = (hrp.Position - pos).Magnitude < 6
-        else
-            -- Для третьего этажа проверяем только горизонтальное расстояние
-            local horizontalDistance = Vector3.new(
-                hrp.Position.X,
-                0,
-                hrp.Position.Z
-            ) - Vector3.new(pos.X, 0, pos.Z)
-            reached = horizontalDistance.Magnitude < tolerance
-        end
-
-        if reached then
-            lv.VectorVelocity = Vector3.zero
-            lv:Destroy()
-            attachment:Destroy()
-            conn:Disconnect()
-
-            if level == 2 and not fromThirdFloor then
-                local mainTarget = getTargetForFloor(2, true)
-                if mainTarget then
-                    updateStatus('Found main target on floor 2')
-                    moveToTarget(mainTarget, 2, true)
-                else
-                    warn('No main target found on floor 2')
-                    updateStatus('No main target found')
-                    isMoving = false
-                    actionBtn.Text = 'START'
-                    actionBtn.BackgroundColor3 = mainColor
-                end
-            elseif level == 3 then
-                updateStatus('Reached third floor target, starting descent...')
-
-                -- Теперь начинаем снижение только после достижения цели
-                local descentLv, descentAttachment = setupFlight()
-                local descentSpeed = 15
-                local targetHeight = 20 -- Высота второго этажа
-
-                local descentConn
-                descentConn = RunService.Heartbeat:Connect(function()
-                    if not isMoving then
-                        descentLv.VectorVelocity = Vector3.zero
-                        descentLv:Destroy()
-                        descentAttachment:Destroy()
-                        descentConn:Disconnect()
-                        return
-                    end
-
-                    -- Проверяем, достигли ли мы целевой высоты
-                    if hrp.Position.Y <= targetHeight then
-                        descentLv.VectorVelocity = Vector3.zero
-                        descentLv:Destroy()
-                        descentAttachment:Destroy()
-                        descentConn:Disconnect()
-
-                        updateStatus('Landed on floor 2, finding target')
-
-                        -- Ищем цель на втором этаже
-                        local newTarget = getTargetForFloor(2, true)
-                        if newTarget then
-                            moveToTarget(newTarget, 2, true)
-                        else
-                            warn('No target on floor 2 after fall')
-                            updateStatus('No target on floor 2')
-                            isMoving = false
-                            actionBtn.Text = 'START'
-                            actionBtn.BackgroundColor3 = mainColor
-                        end
-                    else
-                        -- Плавно снижаемся
-                        descentLv.VectorVelocity =
-                            Vector3.new(0, -descentSpeed, 0)
-                        updateStatus(
-                            'Descending to floor 2, height: '
-                                .. math.floor(hrp.Position.Y)
-                        )
-                    end
-                end)
-                table.insert(activeConnections, descentConn)
-            else
-                -- Только для уровня 2 после достижения цели двигаемся к X = -410
-                updateStatus('Moving to X = -410')
-
-                -- Создаем новое движение для перемещения к X = -410
-                local moveLv, moveAttachment = setupFlight()
-                local moveSpeed = 25
-
-                local moveConn
-                moveConn = RunService.Heartbeat:Connect(function()
-                    if not isMoving then
-                        moveLv.VectorVelocity = Vector3.zero
-                        moveLv:Destroy()
-                        moveAttachment:Destroy()
-                        moveConn:Disconnect()
-                        return
-                    end
-
-                    local distanceToTarget = math.abs(hrp.Position.X - -410)
-
-                    if distanceToTarget <= 5 then
-                        moveLv.VectorVelocity = Vector3.zero
-                        moveLv:Destroy()
-                        moveAttachment:Destroy()
-                        moveConn:Disconnect()
-                        updateStatus('Reached X = -410, starting delivery')
-                        moveToDelivery()
-                    else
-                        -- Двигаемся только по оси X, сохраняя текущую высоту
-                        local directionX = hrp.Position.X > -410 and -1 or 1
-                        moveLv.VectorVelocity =
-                            Vector3.new(directionX * moveSpeed, 0, 0)
-                        updateStatus(
-                            'Moving to X = -410, distance: '
-                                .. math.floor(distanceToTarget)
-                        )
-                    end
-                end)
-                table.insert(activeConnections, moveConn)
-            end
-        else
-            -- Продолжаем движение к цели
-            local direction = (pos - hrp.Position)
-            if direction.Magnitude > 0 then
-                direction = direction.Unit
-
-                -- Для третьего этажа двигаемся только по горизонтали, не меняя высоту
-                if level == 3 then
-                    lv.VectorVelocity = Vector3.new(
-                        direction.X * speed,
-                        0, -- Сохраняем текущую высоту на третьем этаже
-                        direction.Z * speed
-                    )
-                elseif level == 2 then
-                    lv.VectorVelocity = Vector3.new(
-                        direction.X * speed,
-                        0, -- Сохраняем текущую высоту на втором этаже
-                        direction.Z * speed
-                    )
-                else
-                    lv.VectorVelocity = Vector3.new(
-                        direction.X * speed,
-                        direction.Y * speed,
-                        direction.Z * speed
-                    )
-                end
-            else
-                lv.VectorVelocity = Vector3.zero
-            end
-        end
-    end)
-    table.insert(activeConnections, conn)
-end
-
--- Function to check arm rotation
-local function checkArmRotation()
-    if not character then
-        return false
-    end
-    local leftArm = character:FindFirstChild('LeftUpperArm')
-    if not leftArm then
-        return false
-    end
-
-    return math.deg(leftArm.Orientation.X) > 60
-end
-
--- Function to handle ProximityPrompt
-local function handlePromptTriggered(prompt)
-    if isActive and not promptTriggered then
-        promptTriggered = true
-        updateStatus('Prompt triggered, waiting for arm rotation...')
-    end
-end
-
--- Main process start function
-local function startProcess()
-    if isMoving then
-        isMoving = false
-        isActive = false
-        actionBtn.Text = 'START'
-        actionBtn.BackgroundColor3 = mainColor
-        updateStatus('Process canceled')
-
-        if promptConnection then
-            promptConnection:Disconnect()
-            promptConnection = nil
-        end
-
-        if armCheckConnection then
-            armCheckConnection:Disconnect()
-            armCheckConnection = nil
-        end
-        return
-    end
-
-    isActive = true
-    promptTriggered = false
-    actionBtn.Text = 'CANCEL'
-    actionBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
-    updateStatus('Waiting for proximity prompt...')
-
-    promptConnection =
-        ProximityPromptService.PromptTriggered:Connect(handlePromptTriggered)
-    table.insert(activeConnections, promptConnection)
-
-    armCheckConnection = RunService.Heartbeat:Connect(function()
-        if not isActive then
-            armCheckConnection:Disconnect()
-            return
-        end
-
-        if promptTriggered and checkArmRotation() then
-            isMoving = true
-            isActive = false
-            actionBtn.Text = 'STOP'
-            actionBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
-
-            if promptConnection then
-                promptConnection:Disconnect()
-                promptConnection = nil
-            end
-
-            if armCheckConnection then
-                armCheckConnection:Disconnect()
-                armCheckConnection = nil
-            end
-
-            updateStatus('Starting process')
-            local currentY = hrp.Position.Y
-            local level = currentY <= 8 and 1 or (currentY <= 24 and 2 or 3)
-            updateStatus('Current floor: ' .. level)
-            local target = getTargetForFloor(level, false)
-            if target then
-                updateStatus('Found target for floor ' .. level)
-                moveToTarget(target, level, false)
-            else
-                warn('No target found for floor: ' .. level)
-                updateStatus('No target found')
-                isMoving = false
-                actionBtn.Text = 'START'
-                actionBtn.BackgroundColor3 = mainColor
-            end
-        end
-    end)
-    table.insert(activeConnections, armCheckConnection)
-end
-
-actionBtn.MouseButton1Click:Connect(function()
-    if isMoving or isActive then
-        isMoving = false
-        isActive = false
-        actionBtn.Text = 'START'
-        actionBtn.BackgroundColor3 = mainColor
-        updateStatus('Process canceled')
-
-        if promptConnection then
-            promptConnection:Disconnect()
-            promptConnection = nil
-        end
-
-        if armCheckConnection then
-            armCheckConnection:Disconnect()
-            armCheckConnection = nil
-        end
-    else
-        startProcess()
+controlButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragStart = input.Position
+        startPos = controlButton.Position
     end
 end)
 
-updateStatus('Ready to work')
-
--- Функция очистки
-local function cleanup()
-    -- Отключаем все соединения
-    for _, connection in ipairs(activeConnections) do
-        pcall(function()
-            connection:Disconnect()
-        end)
+controlButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
     end
-    activeConnections = {}
+end)
 
-    -- Останавливаем все процессы
-    isActive = false
-    isMoving = false
-    promptTriggered = false
-
-    if promptConnection then
-        pcall(function()
-            promptConnection:Disconnect()
-        end)
-        promptConnection = nil
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragStart then
+        updateDrag(input)
     end
+end)
 
-    if armCheckConnection then
-        pcall(function()
-            armCheckConnection:Disconnect()
-        end)
-        armCheckConnection = nil
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragStart = nil
     end
+end)
 
-    -- Удаляем меню
-    if screenGui and screenGui.Parent then
-        screenGui:Destroy()
-        screenGui = nil
-    end
+-- Эффект при наведении на кнопку
+controlButton.MouseEnter:Connect(function()
+    TweenService:Create(
+        controlButton,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+    ):Play()
+end)
 
-    -- Очищаем физические объекты
-    if hrp and hrp.Parent then
-        for _, obj in ipairs(hrp:GetChildren()) do
-            if obj:IsA('LinearVelocity') or obj:IsA('Attachment') then
-                obj:Destroy()
-            end
-        end
+controlButton.MouseLeave:Connect(function()
+    TweenService:Create(
+        controlButton,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
+    ):Play()
+end)
+
+-- Обработчик нажатия кнопки
+controlButton.MouseButton1Click:Connect(function()
+    speedEnabled = not speedEnabled
+
+    if speedEnabled then
+        controlButton.Text = 'SPEED: ON (25)'
+        controlButton.TextColor3 = Color3.fromRGB(0, 255, 140)
+        controlButtonStroke.Color = Color3.fromRGB(0, 200, 100)
+    else
+        controlButton.Text = 'SPEED: OFF'
+        controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
     end
-end
+end)
+
+-- Применяем скорость каждый кадр
+RunService.RenderStepped:Connect(applyVelocity)
