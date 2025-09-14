@@ -15,7 +15,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Основная кнопка
 local controlButton = Instance.new('TextButton')
-controlButton.Size = UDim2.new(0, 150, 0, 40)
+controlButton.Size = UDim2.new(0, 100, 0, 40)
 controlButton.Position = UDim2.new(0, 10, 0, 10)
 controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 controlButton.BorderSizePixel = 0
@@ -38,15 +38,15 @@ controlButtonStroke.Parent = controlButton
 
 -- Текстовое поле для ввода скорости
 local speedTextBox = Instance.new('TextBox')
-speedTextBox.Size = UDim2.new(0, 60, 0, 30)
-speedTextBox.Position = UDim2.new(0, 160, 0, 10)
+speedTextBox.Size = UDim2.new(0, 50, 0, 40)
+speedTextBox.Position = UDim2.new(0, 120, 0, 10)
 speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 speedTextBox.BorderSizePixel = 0
 speedTextBox.Text = '25'
 speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 speedTextBox.Font = Enum.Font.Code
 speedTextBox.TextSize = 14
-speedTextBox.PlaceholderText = 'Speed (1-45)'
+speedTextBox.PlaceholderText = 'Speed'
 speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
 speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
 speedTextBox.Parent = ScreenGui
@@ -88,9 +88,6 @@ local function updateSpeedFromTextBox()
         local newSpeed = tonumber(text)
         if newSpeed and newSpeed >= 1 and newSpeed <= 45 then
             currentSpeed = newSpeed
-            if speedEnabled then
-                controlButton.Text = 'SPEED: ON (' .. currentSpeed .. ')'
-            end
         else
             -- Если введено недопустимое значение, возвращаем предыдущее
             speedTextBox.Text = tostring(currentSpeed)
@@ -104,11 +101,11 @@ local function updateDrag(input)
     local newX = startPos.X.Offset + delta.X
     local newY = startPos.Y.Offset + delta.Y
 
-    newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
+    newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X - speedTextBox.AbsoluteSize.X)
     newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
 
     controlButton.Position = UDim2.new(0, newX, 0, newY)
-    speedTextBox.Position = UDim2.new(0, newX + 160, 0, newY)
+    speedTextBox.Position = UDim2.new(0, newX + 110, 0, newY)
 end
 
 controlButton.InputBegan:Connect(function(input)
@@ -166,29 +163,12 @@ controlButton.MouseLeave:Connect(function()
     ):Play()
 end)
 
--- Эффект при наведении на текстовое поле
-speedTextBox.MouseEnter:Connect(function()
-    TweenService:Create(
-        speedTextBox,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}
-    ):Play()
-end)
-
-speedTextBox.MouseLeave:Connect(function()
-    TweenService:Create(
-        speedTextBox,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-    ):Play()
-end)
-
 -- Обработчик нажатия кнопки
 controlButton.MouseButton1Click:Connect(function()
     speedEnabled = not speedEnabled
 
     if speedEnabled then
-        controlButton.Text = 'SPEED: ON (' .. currentSpeed .. ')'
+        controlButton.Text = 'SPEED: ON'
         controlButton.TextColor3 = Color3.fromRGB(0, 255, 140)
         controlButtonStroke.Color = Color3.fromRGB(0, 200, 100)
     else
