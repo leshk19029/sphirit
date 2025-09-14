@@ -66,6 +66,7 @@ speedTextBoxStroke.Parent = speedTextBox
 local speedEnabled = false
 local currentSpeed = 25
 local dragInput, dragStart, startPos
+local isDragging = false
 
 -- Функция для применения скорости
 local function applyVelocity()
@@ -116,10 +117,24 @@ local function updateDrag(input)
     speedTextBox.Position = UDim2.new(0, newX + 130, 0, newY)
 end
 
+-- Обработчики для перетаскивания
 controlButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragStart = input.Position
         startPos = controlButton.Position
+        isDragging = true
+        
+        -- Запускаем проверку на отпускание для определения клика
+        task.spawn(function()
+            local startTime = tick()
+            while isDragging do
+                wait()
+                -- Если прошло больше 0.2 секунды, считаем это перетаскиванием
+                if tick() - startTime > 0.2 then
+                    return
+                end
+            end
+        end)
     end
 end)
 
@@ -133,6 +148,7 @@ speedTextBox.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragStart = input.Position
         startPos = controlButton.Position
+        isDragging = true
     end
 end)
 
@@ -150,35 +166,57 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        -- Проверяем, было ли это короткое нажатие (клик) а не перетаскивание
+        if isDragging then
+            local mouse = Players.LocalPlayer:GetMouse()
+            local currentPos = Vector2.new(mouse.X, mouse.Y)
+            local dragDistance = (currentPos - dragStart).Magnitude
+            
+            -- Если расстояние перемещения меньше 5 пикселей, считаем это кликом
+            if dragDistance < 5 then
+                speedEnabled = not speedEnabled
+
+                if speedEnabled then
+                    controlButton.Text = 'SPEED: ON'
+                    TweenService:Create(
+                        controlButton,
+                        TweenInfo.new(0.2),
+                        {BackgroundColor3 = Color3.fromRGB(0, 120, 0)}
+                    ):Play()
+                else
+                    controlButton.Text = 'SPEED: OFF'
+                    TweenService:Create(
+                        controlButton,
+                        TweenInfo.new(0.2),
+                        {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
+                    ):Play()
+                end
+            end
+        end
+        
         dragStart = nil
+        isDragging = false
     end
 end)
 
 -- Эффект при наведении на кнопку
 controlButton.MouseEnter:Connect(function()
-    TweenService:Create(
-        controlButton,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-    ):Play()
+    if not speedEnabled then
+        TweenService:Create(
+            controlButton,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+        ):Play()
+    end
 end)
 
 controlButton.MouseLeave:Connect(function()
-    TweenService:Create(
-        controlButton,
-        TweenInfo.new(0.2),
-        {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
-    ):Play()
-end)
-
--- Обработчик нажатия кнопки
-controlButton.MouseButton1Click:Connect(function()
-    speedEnabled = not speedEnabled
-
-    if speedEnabled then
-        controlButton.Text = 'SPEED: ON'
-    else
-        controlButton.Text = 'SPEED: OFF'
+    if not speedEnabled then
+        TweenService:Create(
+            controlButton,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
+        ):Play()
     end
 end)
 
