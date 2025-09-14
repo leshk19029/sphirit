@@ -36,6 +36,32 @@ controlButtonStroke.Thickness = 2
 controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
 controlButtonStroke.Parent = controlButton
 
+-- Текстовое поле для ввода скорости
+local speedTextBox = Instance.new('TextBox')
+speedTextBox.Size = UDim2.new(0, 60, 0, 30)
+speedTextBox.Position = UDim2.new(0, 160, 0, 10)
+speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+speedTextBox.BorderSizePixel = 0
+speedTextBox.Text = '25'
+speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedTextBox.Font = Enum.Font.Code
+speedTextBox.TextSize = 14
+speedTextBox.PlaceholderText = 'Speed (1-45)'
+speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
+speedTextBox.Parent = ScreenGui
+
+local speedTextBoxCorner = Instance.new('UICorner')
+speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
+speedTextBoxCorner.Parent = speedTextBox
+
+local speedTextBoxStroke = Instance.new('UIStroke')
+speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
+speedTextBoxStroke.Thickness = 2
+speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
+speedTextBoxStroke.Parent = speedTextBox
+
 -- Переменные состояния
 local speedEnabled = false
 local currentSpeed = 25
@@ -55,6 +81,23 @@ local function applyVelocity()
     end
 end
 
+-- Функция для обновления скорости из текстового поля
+local function updateSpeedFromTextBox()
+    local text = speedTextBox.Text
+    if text and text ~= "" then
+        local newSpeed = tonumber(text)
+        if newSpeed and newSpeed >= 1 and newSpeed <= 45 then
+            currentSpeed = newSpeed
+            if speedEnabled then
+                controlButton.Text = 'SPEED: ON (' .. currentSpeed .. ')'
+            end
+        else
+            -- Если введено недопустимое значение, возвращаем предыдущее
+            speedTextBox.Text = tostring(currentSpeed)
+        end
+    end
+end
+
 -- Функция перетаскивания
 local function updateDrag(input)
     local delta = input.Position - dragStart
@@ -65,6 +108,7 @@ local function updateDrag(input)
     newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
 
     controlButton.Position = UDim2.new(0, newX, 0, newY)
+    speedTextBox.Position = UDim2.new(0, newX + 160, 0, newY)
 end
 
 controlButton.InputBegan:Connect(function(input)
@@ -75,6 +119,19 @@ controlButton.InputBegan:Connect(function(input)
 end)
 
 controlButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+speedTextBox.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragStart = input.Position
+        startPos = controlButton.Position
+    end
+end)
+
+speedTextBox.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         dragInput = input
     end
@@ -109,12 +166,29 @@ controlButton.MouseLeave:Connect(function()
     ):Play()
 end)
 
+-- Эффект при наведении на текстовое поле
+speedTextBox.MouseEnter:Connect(function()
+    TweenService:Create(
+        speedTextBox,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}
+    ):Play()
+end)
+
+speedTextBox.MouseLeave:Connect(function()
+    TweenService:Create(
+        speedTextBox,
+        TweenInfo.new(0.2),
+        {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+    ):Play()
+end)
+
 -- Обработчик нажатия кнопки
 controlButton.MouseButton1Click:Connect(function()
     speedEnabled = not speedEnabled
 
     if speedEnabled then
-        controlButton.Text = 'SPEED: ON (25)'
+        controlButton.Text = 'SPEED: ON (' .. currentSpeed .. ')'
         controlButton.TextColor3 = Color3.fromRGB(0, 255, 140)
         controlButtonStroke.Color = Color3.fromRGB(0, 200, 100)
     else
@@ -122,6 +196,11 @@ controlButton.MouseButton1Click:Connect(function()
         controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
         controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
     end
+end)
+
+-- Обработчик текстового поля
+speedTextBox.FocusLost:Connect(function(enterPressed)
+    updateSpeedFromTextBox()
 end)
 
 -- Применяем скорость каждый кадр
