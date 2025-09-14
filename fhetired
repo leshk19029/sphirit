@@ -258,16 +258,17 @@ local function loadSpeedBoost()
         return speedBoostModule
     end
     
-    local func = safeLoad(
-        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost',
-        'SpeedBoost'
-    )
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost', true))()
+    end)
     
-    if func then
-        speedBoostModule = func
+    if success then
+        speedBoostModule = result
+        return result
+    else
+        warn('SpeedBoost loading failed:', result)
+        return nil
     end
-    
-    return speedBoostModule
 end
 
 local function startSpeedBoost()
@@ -276,25 +277,18 @@ local function startSpeedBoost()
     end
 
     local func = loadSpeedBoost()
-    if func then
-        -- Только выполняем функцию если она еще не выполнялась
-        if type(func) == "function" then
-            local success, result = pcall(func)
-            if success then
-                functionStates.SpeedBoost = true
-                speedBoostCleanup = result
-                return true
-            else
-                warn('SpeedBoost execution failed:', result)
-                return false
-            end
-        else
-            -- Если это не функция, значит она уже выполнилась
+    if func and type(func) == 'function' then
+        local success, cleanupFunc = pcall(func)
+        if success then
             functionStates.SpeedBoost = true
+            speedBoostCleanup = cleanupFunc
             return true
+        else
+            warn('SpeedBoost execution failed:', cleanupFunc)
+            return false
         end
     else
-        warn('SpeedBoost loading failed')
+        warn('SpeedBoost loading failed or not a function')
         return false
     end
 end
@@ -768,7 +762,7 @@ task.spawn(function()
     loadAntiEffects()
     loadESP()
     loadControlPlayer()
-    loadSpeedBoost()
+    -- loadSpeedBoost() removed to prevent immediate GUI creation
 end)
 
 -- Автоматическое обновление цветов кнопок
