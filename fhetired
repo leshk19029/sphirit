@@ -249,89 +249,6 @@ local function safeLoad(url, name)
     end
 end
 
--- Speed-Boost functionality
-local speedBoostCleanup = nil
-local speedBoostModule = nil
-
-local function loadSpeedBoost()
-    if speedBoostModule then
-        return speedBoostModule
-    end
-    
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet('https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost', true))()
-    end)
-    
-    if success then
-        speedBoostModule = result or "executed"  -- Handle case where script executes but returns nil
-        return speedBoostModule
-    else
-        warn('SpeedBoost loading failed:', result)
-        return nil
-    end
-end
-
-local function startSpeedBoost()
-    if functionStates.SpeedBoost then
-        return true
-    end
-
-    local func = loadSpeedBoost()
-    if func then
-        if type(func) == 'function' then
-            local success, cleanupFunc = pcall(func)
-            if success then
-                functionStates.SpeedBoost = true
-                speedBoostCleanup = cleanupFunc
-                return true
-            else
-                warn('SpeedBoost execution failed:', cleanupFunc)
-                return false
-            end
-        elseif func == "executed" then
-            functionStates.SpeedBoost = true
-            return true
-        else
-            warn('SpeedBoost loading failed or invalid type')
-            return false
-        end
-    end
-    return false
-end
-
-local function stopSpeedBoost()
-    if speedBoostCleanup and type(speedBoostCleanup) == "function" then
-        pcall(speedBoostCleanup)
-        speedBoostCleanup = nil
-    else
-        -- Manual cleanup for executed scripts (destroy GUI)
-        pcall(function()
-            local gui = player.PlayerGui:FindFirstChild('SpeedControl')
-            if gui then
-                gui:Destroy()
-            end
-        end)
-    end
-    
-    functionStates.SpeedBoost = false
-    
-    -- Сбрасываем скорость персонажа
-    pcall(function()
-        local character = player.Character
-        if character then
-            local humanoid = character:FindFirstChild('Humanoid')
-            if humanoid then
-                humanoid.WalkSpeed = 16 -- Стандартная скорость
-            end
-            
-            local rootPart = character:FindFirstChild('HumanoidRootPart')
-            if rootPart then
-                rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 0, rootPart.Velocity.Z)
-            end
-        end
-    end)
-end
-
 -- Anti-Effects functionality
 local antiEffectsCleanup = nil
 
@@ -365,6 +282,7 @@ local function stopAntiEffects()
         antiEffectsCleanup = nil
     end
     functionStates.AntiEffects = false
+    return true
 end
 
 -- ESP functionality
@@ -473,13 +391,85 @@ local function stopControlPlayer()
     
     functionStates.ControlPlayer = false
     
-    -- Удаляем GUI если оно осталось
     pcall(function()
         local playerGui = player:FindFirstChild('PlayerGui')
         if playerGui then
             local controlGui = playerGui:FindFirstChild('ControlPlayerMenu')
             if controlGui then
                 controlGui:Destroy()
+            end
+        end
+    end)
+    
+    return true
+end
+
+-- Speed-Boost functionality
+local speedBoostCleanup = nil
+local speedBoostModule = nil
+
+local function loadSpeedBoost()
+    if speedBoostModule then
+        return speedBoostModule
+    end
+    
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost', true))()
+    end)
+    
+    if success then
+        speedBoostModule = result
+        return speedBoostModule
+    else
+        warn('SpeedBoost loading failed:', result)
+        return nil
+    end
+end
+
+local function startSpeedBoost()
+    if functionStates.SpeedBoost then
+        return true
+    end
+
+    local func = loadSpeedBoost()
+    if func then
+        if type(func) == 'function' then
+            local success, cleanupFunc = pcall(func)
+            if success then
+                functionStates.SpeedBoost = true
+                speedBoostCleanup = cleanupFunc
+                return true
+            else
+                warn('SpeedBoost execution failed:', cleanupFunc)
+                return false
+            end
+        else
+            functionStates.SpeedBoost = true
+            return true
+        end
+    end
+    return false
+end
+
+local function stopSpeedBoost()
+    if speedBoostCleanup and type(speedBoostCleanup) == "function" then
+        pcall(speedBoostCleanup)
+        speedBoostCleanup = nil
+    end
+    
+    functionStates.SpeedBoost = false
+    
+    pcall(function()
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild('Humanoid')
+            if humanoid then
+                humanoid.WalkSpeed = 16
+            end
+            
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            if rootPart then
+                rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 0, rootPart.Velocity.Z)
             end
         end
     end)
@@ -512,9 +502,13 @@ antiEffectsToggleStroke.Parent = antiEffectsToggle
 
 antiEffectsToggle.MouseButton1Click:Connect(function()
     if functionStates.AntiEffects then
-        stopAntiEffects()
-        antiEffectsToggle.TextColor3 = textColor
-        antiEffectsToggleStroke.Color = borderColor
+        if stopAntiEffects() then
+            antiEffectsToggle.TextColor3 = textColor
+            antiEffectsToggleStroke.Color = borderColor
+        else
+            antiEffectsToggle.TextColor3 = Color3.fromRGB(255, 50, 50)
+            antiEffectsToggleStroke.Color = Color3.fromRGB(255, 50, 50)
+        end
     else
         antiEffectsToggle.TextColor3 = Color3.fromRGB(255, 255, 100)
         antiEffectsToggleStroke.Color = Color3.fromRGB(255, 255, 100)
@@ -775,7 +769,6 @@ task.spawn(function()
     loadAntiEffects()
     loadESP()
     loadControlPlayer()
-    -- loadSpeedBoost() removed to prevent immediate GUI creation
 end)
 
 -- Автоматическое обновление цветов кнопок
@@ -783,37 +776,64 @@ task.spawn(function()
     while true do
         task.wait(0.1)
 
-        -- Обновляем цвет кнопок на основе состояний из functionStates
-        if functionStates.AntiEffects and antiEffectsToggle.TextColor3 ~= accentColor then
-            antiEffectsToggle.TextColor3 = accentColor
-            antiEffectsToggleStroke.Color = accentColor
-        elseif not functionStates.AntiEffects and antiEffectsToggle.TextColor3 == accentColor then
-            antiEffectsToggle.TextColor3 = textColor
-            antiEffectsToggleStroke.Color = borderColor
+        -- Anti-Effects
+        if functionStates.AntiEffects then
+            if antiEffectsToggle.TextColor3 ~= accentColor and 
+               antiEffectsToggle.TextColor3 ~= Color3.fromRGB(255, 255, 100) then
+                antiEffectsToggle.TextColor3 = accentColor
+                antiEffectsToggleStroke.Color = accentColor
+            end
+        else
+            if antiEffectsToggle.TextColor3 == accentColor or
+               antiEffectsToggle.TextColor3 == Color3.fromRGB(255, 50, 50) then
+                antiEffectsToggle.TextColor3 = textColor
+                antiEffectsToggleStroke.Color = borderColor
+            end
         end
 
-        if functionStates.ESP and espToggle.TextColor3 ~= accentColor then
-            espToggle.TextColor3 = accentColor
-            espToggleStroke.Color = accentColor
-        elseif not functionStates.ESP and espToggle.TextColor3 == accentColor then
-            espToggle.TextColor3 = textColor
-            espToggleStroke.Color = borderColor
+        -- ESP
+        if functionStates.ESP then
+            if espToggle.TextColor3 ~= accentColor and 
+               espToggle.TextColor3 ~= Color3.fromRGB(255, 255, 100) then
+                espToggle.TextColor3 = accentColor
+                espToggleStroke.Color = accentColor
+            end
+        else
+            if espToggle.TextColor3 == accentColor or
+               espToggle.TextColor3 == Color3.fromRGB(255, 50, 50) then
+                espToggle.TextColor3 = textColor
+                espToggleStroke.Color = borderColor
+            end
         end
 
-        if functionStates.ControlPlayer and controlPlayerToggle.TextColor3 ~= accentColor then
-            controlPlayerToggle.TextColor3 = accentColor
-            controlPlayerToggleStroke.Color = accentColor
-        elseif not functionStates.ControlPlayer and controlPlayerToggle.TextColor3 == accentColor then
-            controlPlayerToggle.TextColor3 = textColor
-            controlPlayerToggleStroke.Color = borderColor
+        -- Control-Player
+        if functionStates.ControlPlayer then
+            if controlPlayerToggle.TextColor3 ~= accentColor and 
+               controlPlayerToggle.TextColor3 ~= Color3.fromRGB(255, 255, 100) then
+                controlPlayerToggle.TextColor3 = accentColor
+                controlPlayerToggleStroke.Color = accentColor
+            end
+        else
+            if controlPlayerToggle.TextColor3 == accentColor or
+               controlPlayerToggle.TextColor3 == Color3.fromRGB(255, 50, 50) then
+                controlPlayerToggle.TextColor3 = textColor
+                controlPlayerToggleStroke.Color = borderColor
+            end
         end
 
-        if functionStates.SpeedBoost and speedBoostToggle.TextColor3 ~= accentColor then
-            speedBoostToggle.TextColor3 = accentColor
-            speedBoostToggleStroke.Color = accentColor
-        elseif not functionStates.SpeedBoost and speedBoostToggle.TextColor3 == accentColor then
-            speedBoostToggle.TextColor3 = textColor
-            speedBoostToggleStroke.Color = borderColor
+        -- Speed Boost
+        if functionStates.SpeedBoost then
+            if speedBoostToggle.TextColor3 ~= accentColor and 
+               speedBoostToggle.TextColor3 ~= Color3.fromRGB(255, 255, 100) then
+                speedBoostToggle.TextColor3 = accentColor
+                speedBoostToggleStroke.Color = accentColor
+            end
+        else
+            if speedBoostToggle.TextColor3 == accentColor or
+               speedBoostToggle.TextColor3 == Color3.fromRGB(255, 50, 50) then
+                speedBoostToggle.TextColor3 = textColor
+                speedBoostToggleStroke.Color = borderColor
+            end
         end
     end
 end)
