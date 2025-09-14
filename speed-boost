@@ -23,7 +23,7 @@ return function()
 
     -- Линия для перемещения (на 10 пикселей выше, высота уменьшена вдвое)
     local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(1, 0, 0, 10)  -- Высота 5 пикселей (вдвое меньше)
+    dragHandle.Size = UDim2.new(1, 0, 0, 15)  -- Высота 5 пикселей (вдвое меньше)
     dragHandle.Position = UDim2.new(0, 0, 0, -10)  -- На 10 пикселей выше
     dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     dragHandle.BorderSizePixel = 0
