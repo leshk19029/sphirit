@@ -263,8 +263,8 @@ local function loadSpeedBoost()
     end)
     
     if success then
-        speedBoostModule = result
-        return result
+        speedBoostModule = result or "executed"  -- Handle case where script executes but returns nil
+        return speedBoostModule
     else
         warn('SpeedBoost loading failed:', result)
         return nil
@@ -277,27 +277,40 @@ local function startSpeedBoost()
     end
 
     local func = loadSpeedBoost()
-    if func and type(func) == 'function' then
-        local success, cleanupFunc = pcall(func)
-        if success then
+    if func then
+        if type(func) == 'function' then
+            local success, cleanupFunc = pcall(func)
+            if success then
+                functionStates.SpeedBoost = true
+                speedBoostCleanup = cleanupFunc
+                return true
+            else
+                warn('SpeedBoost execution failed:', cleanupFunc)
+                return false
+            end
+        elseif func == "executed" then
             functionStates.SpeedBoost = true
-            speedBoostCleanup = cleanupFunc
             return true
         else
-            warn('SpeedBoost execution failed:', cleanupFunc)
+            warn('SpeedBoost loading failed or invalid type')
             return false
         end
-    else
-        warn('SpeedBoost loading failed or not a function')
-        return false
     end
+    return false
 end
 
 local function stopSpeedBoost()
-    -- Пытаемся почистить если есть функция очистки
     if speedBoostCleanup and type(speedBoostCleanup) == "function" then
         pcall(speedBoostCleanup)
         speedBoostCleanup = nil
+    else
+        -- Manual cleanup for executed scripts (destroy GUI)
+        pcall(function()
+            local gui = player.PlayerGui:FindFirstChild('SpeedControl')
+            if gui then
+                gui:Destroy()
+            end
+        end)
     end
     
     functionStates.SpeedBoost = false
