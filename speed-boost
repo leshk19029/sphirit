@@ -6,95 +6,104 @@ local RunService = game:GetService('RunService')
 return function()
     local player = Players.LocalPlayer
     local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild('Humanoid', 5) -- Ожидание до 5 секунд
+    local humanoid = character:WaitForChild('Humanoid', 5)
 
-    -- Проверка, что humanoid существует
+    -- Проверка на существование humanoid
     if not humanoid then
-        warn("Humanoid не найден для персонажа!")
-        return function() end -- Возвращаем пустую функцию очистки
+        warn("Humanoid не найден!")
+        return function() end
     end
 
-    -- Создаем основной GUI
-    local ScreenGui = Instance.new('ScreenGui')
-    ScreenGui.Name = 'SpeedControl'
-    ScreenGui.Parent = player.PlayerGui
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.IgnoreGuiInset = true -- Игнорируем верхнюю панель Roblox
+    -- Функция для создания GUI
+    local function createGui()
+        local ScreenGui = Instance.new('ScreenGui')
+        ScreenGui.Name = 'SpeedControl'
+        ScreenGui.Parent = player.PlayerGui
+        ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ScreenGui.ResetOnSpawn = false -- Предотвращаем сброс при респавне
+        ScreenGui.IgnoreGuiInset = true -- Игнорируем верхнюю панель Roblox
 
-    -- Контейнер для элементов управления
-    local controlContainer = Instance.new('Frame')
-    controlContainer.Size = UDim2.new(0, 180, 0, 50)
-    controlContainer.Position = UDim2.new(0, 90, 0, 150)
-    controlContainer.BackgroundTransparency = 1
-    controlContainer.Parent = ScreenGui
+        -- Контейнер для элементов управления
+        local controlContainer = Instance.new('Frame')
+        controlContainer.Size = UDim2.new(0, 180, 0, 50)
+        controlContainer.Position = UDim2.new(0, 90, 0, 150)
+        controlContainer.BackgroundTransparency = 1
+        controlContainer.Parent = ScreenGui
 
-    -- Линия для перемещения (перемещена в контейнер)
-    local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(1, 0, 0, 10)
-    dragHandle.Position = UDim2.new(0, 0, 0, -10) -- Над контейнером
-    dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    dragHandle.BorderSizePixel = 0
-    dragHandle.Text = ""
-    dragHandle.AutoButtonColor = false
-    dragHandle.Parent = controlContainer
+        -- Линия для перемещения
+        local dragHandle = Instance.new('TextButton')
+        dragHandle.Size = UDim2.new(1, 0, 0, 10)
+        dragHandle.Position = UDim2.new(0, 0, 0, 10) -- Над контейнером
+        dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        dragHandle.BorderSizePixel = 0
+        dragHandle.Text = ""
+        dragHandle.AutoButtonColor = false
+        dragHandle.Parent = controlContainer
 
-    local dragHandleCorner = Instance.new('UICorner')
-    dragHandleCorner.CornerRadius = UDim.new(0, 3)
-    dragHandleCorner.Parent = dragHandle
+        local dragHandleCorner = Instance.new('UICorner')
+        dragHandleCorner.CornerRadius = UDim.new(0, 3)
+        dragHandleCorner.Parent = dragHandle
 
-    -- Основная кнопка
-    local controlButton = Instance.new('TextButton')
-    controlButton.Size = UDim2.new(0, 120, 0, 40)
-    controlButton.Position = UDim2.new(0, 0, 0, 0)
-    controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    controlButton.BorderSizePixel = 0
-    controlButton.Text = 'SPEED: OFF'
-    controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    controlButton.Font = Enum.Font.Code
-    controlButton.TextSize = 14
-    controlButton.Parent = controlContainer
+        -- Основная кнопка
+        local controlButton = Instance.new('TextButton')
+        controlButton.Size = UDim2.new(0, 120, 0, 40)
+        controlButton.Position = UDim2.new(0, 250, 0, 200)
+        controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        controlButton.BorderSizePixel = 0
+        controlButton.Text = 'SPEED: OFF'
+        controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        controlButton.Font = Enum.Font.Code
+        controlButton.TextSize = 14
+        controlButton.Parent = controlContainer
 
-    local controlButtonCorner = Instance.new('UICorner')
-    controlButtonCorner.CornerRadius = UDim.new(0, 6)
-    controlButtonCorner.Parent = controlButton
+        local controlButtonCorner = Instance.new('UICorner')
+        controlButtonCorner.CornerRadius = UDim.new(0, 6)
+        controlButtonCorner.Parent = controlButton
 
-    local controlButtonStroke = Instance.new('UIStroke')
-    controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
-    controlButtonStroke.Thickness = 2
-    controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
-    controlButtonStroke.Parent = controlButton
+        local controlButtonStroke = Instance.new('UIStroke')
+        controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
+        controlButtonStroke.Thickness = 2
+        controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
+        controlButtonStroke.Parent = controlButton
 
-    -- Текстовое поле для ввода скорости
-    local speedTextBox = Instance.new('TextBox')
-    speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-    speedTextBox.Position = UDim2.new(0, 130, 0, 0)
-    speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    speedTextBox.BorderSizePixel = 0
-    speedTextBox.Text = '25'
-    speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    speedTextBox.Font = Enum.Font.Code
-    speedTextBox.TextSize = 14
-    speedTextBox.PlaceholderText = 'Speed'
-    speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
-    speedTextBox.Parent = controlContainer
+        -- Текстовое поле для ввода скорости
+        local speedTextBox = Instance.new('TextBox')
+        speedTextBox.Size = UDim2.new(0, 50, 0, 40)
+        speedTextBox.Position = UDim2.new(0, 130, 0, 0)
+        speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        speedTextBox.BorderSizePixel = 0
+        speedTextBox.Text = '25'
+        speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        speedTextBox.Font = Enum.Font.Code
+        speedTextBox.TextSize = 14
+        speedTextBox.PlaceholderText = 'Speed'
+        speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+        speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
+        speedTextBox.Parent = controlContainer
 
-    local speedTextBoxCorner = Instance.new('UICorner')
-    speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
-    speedTextBoxCorner.Parent = speedTextBox
+        local speedTextBoxCorner = Instance.new('UICorner')
+        speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
+        speedTextBoxCorner.Parent = speedTextBox
 
-    local speedTextBoxStroke = Instance.new('UIStroke')
-    speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
-    speedTextBoxStroke.Thickness = 2
-    speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
-    speedTextBoxStroke.Parent = speedTextBox
+        local speedTextBoxStroke = Instance.new('UIStroke')
+        speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
+        speedTextBoxStroke.Thickness = 2
+        speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
+        speedTextBoxStroke.Parent = speedTextBox
+
+        return ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox
+    end
 
     -- Переменные состояния
     local speedEnabled = false
     local currentSpeed = 25
     local dragInput, dragStart, startPos
+    local ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox
+
+    -- Создаём GUI в начале
+    ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
 
     -- Функция для применения скорости
     local function applyVelocity()
@@ -113,8 +122,7 @@ return function()
             local velocity = moveDirection * currentSpeed
             rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
         else
-            -- Сбрасываем горизонтальную скорость, если не движемся
-            rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+            rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0) -- Сбрасываем горизонтальную скорость
         end
     end
 
@@ -229,12 +237,40 @@ return function()
         updateSpeedFromTextBox()
     end)
 
-    -- Обновление персонажа при респавне
+    -- Обработка респавна персонажа
     player.CharacterAdded:Connect(function(newCharacter)
         character = newCharacter
         humanoid = newCharacter:WaitForChild('Humanoid', 5)
         if not humanoid then
             warn("Humanoid не найден после респавна!")
+        end
+
+        -- Проверяем, существует ли GUI, и воссоздаём при необходимости
+        if not ScreenGui.Parent then
+            ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
+            -- Повторно настраиваем события
+            setupDragging(dragHandle)
+            setupDragging(controlButton)
+            setupDragging(speedTextBox)
+            controlButton.MouseEnter:Connect(function()
+                TweenService:Create(controlButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
+            end)
+            controlButton.MouseLeave:Connect(function()
+                TweenService:Create(controlButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}):Play()
+            end)
+            dragHandle.MouseEnter:Connect(function()
+                TweenService:Create(dragHandle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}):Play()
+            end)
+            dragHandle.MouseLeave:Connect(function()
+                TweenService:Create(dragHandle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}):Play()
+            end)
+            controlButton.MouseButton1Click:Connect(function()
+                speedEnabled = not speedEnabled
+                controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
+            end)
+            speedTextBox.FocusLost:Connect(function(enterPressed)
+                updateSpeedFromTextBox()
+            end)
         end
     end)
 
