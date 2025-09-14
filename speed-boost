@@ -3,227 +3,187 @@ local TweenService = game:GetService('TweenService')
 local UserInputService = game:GetService('UserInputService')
 local RunService = game:GetService('RunService')
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild('Humanoid')
+return function()
+    local player = Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild('Humanoid')
 
--- Создаем основной GUI
-local ScreenGui = Instance.new('ScreenGui')
-ScreenGui.Name = 'SpeedControl'
-ScreenGui.Parent = player.PlayerGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    -- Создаем основной GUI
+    local ScreenGui = Instance.new('ScreenGui')
+    ScreenGui.Name = 'SpeedControl'
+    ScreenGui.Parent = player.PlayerGui
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основная кнопка
-local controlButton = Instance.new('TextButton')
-controlButton.Size = UDim2.new(0, 120, 0, 40)
-controlButton.Position = UDim2.new(0, 10, 0, 10)
-controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-controlButton.BorderSizePixel = 0
-controlButton.Text = 'SPEED: OFF'
-controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-controlButton.Font = Enum.Font.Code
-controlButton.TextSize = 14
-controlButton.Parent = ScreenGui
+    -- Основная кнопка
+    local controlButton = Instance.new('TextButton')
+    controlButton.Size = UDim2.new(0, 120, 0, 40)
+    controlButton.Position = UDim2.new(0, 10, 0, 10)
+    controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    controlButton.BorderSizePixel = 0
+    controlButton.Text = 'SPEED: OFF'
+    controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    controlButton.Font = Enum.Font.Code
+    controlButton.TextSize = 14
+    controlButton.Parent = ScreenGui
 
-local controlButtonCorner = Instance.new('UICorner')
-controlButtonCorner.CornerRadius = UDim.new(0, 6)
-controlButtonCorner.Parent = controlButton
+    local controlButtonCorner = Instance.new('UICorner')
+    controlButtonCorner.CornerRadius = UDim.new(0, 6)
+    controlButtonCorner.Parent = controlButton
 
-local controlButtonStroke = Instance.new('UIStroke')
-controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
-controlButtonStroke.Thickness = 2
-controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
-controlButtonStroke.Parent = controlButton
+    local controlButtonStroke = Instance.new('UIStroke')
+    controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
+    controlButtonStroke.Thickness = 2
+    controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
+    controlButtonStroke.Parent = controlButton
 
--- Текстовое поле для ввода скорости
-local speedTextBox = Instance.new('TextBox')
-speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-speedTextBox.Position = UDim2.new(0, 140, 0, 10)
-speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-speedTextBox.BorderSizePixel = 0
-speedTextBox.Text = '25'
-speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedTextBox.Font = Enum.Font.Code
-speedTextBox.TextSize = 14
-speedTextBox.PlaceholderText = 'Speed'
-speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
-speedTextBox.Parent = ScreenGui
+    -- Текстовое поле для ввода скорости
+    local speedTextBox = Instance.new('TextBox')
+    speedTextBox.Size = UDim2.new(0, 50, 0, 40)
+    speedTextBox.Position = UDim2.new(0, 140, 0, 10)
+    speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    speedTextBox.BorderSizePixel = 0
+    speedTextBox.Text = '25'
+    speedTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    speedTextBox.Font = Enum.Font.Code
+    speedTextBox.TextSize = 14
+    speedTextBox.PlaceholderText = 'Speed'
+    speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
+    speedTextBox.Parent = ScreenGui
 
-local speedTextBoxCorner = Instance.new('UICorner')
-speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
-speedTextBoxCorner.Parent = speedTextBox
+    local speedTextBoxCorner = Instance.new('UICorner')
+    speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
+    speedTextBoxCorner.Parent = speedTextBox
 
-local speedTextBoxStroke = Instance.new('UIStroke')
-speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
-speedTextBoxStroke.Thickness = 2
-speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
-speedTextBoxStroke.Parent = speedTextBox
+    local speedTextBoxStroke = Instance.new('UIStroke')
+    speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
+    speedTextBoxStroke.Thickness = 2
+    speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
+    speedTextBoxStroke.Parent = speedTextBox
 
--- Переменные состояния
-local speedEnabled = false
-local currentSpeed = 25
-local dragInput, dragStart, startPos
-local isDragging = false
+    -- Переменные состояния
+    local speedEnabled = false
+    local currentSpeed = 25
+    local dragInput, dragStart, startPos
 
--- Функция для применения скорости
-local function applyVelocity()
-    if speedEnabled and character and humanoid then
-        local rootPart = character:FindFirstChild('HumanoidRootPart')
-        if rootPart then
-            local moveDirection = humanoid.MoveDirection
-            if moveDirection.Magnitude > 0 then
-                local velocity = moveDirection * currentSpeed
-                rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
-            end
-        end
-    end
-end
-
--- Функция для обновления скорости из текстового поля
-local function updateSpeedFromTextBox()
-    local text = speedTextBox.Text
-    if text and text ~= "" then
-        local newSpeed = tonumber(text)
-        if newSpeed then
-            if newSpeed > 45 then
-                currentSpeed = 45
-                speedTextBox.Text = "45"
-            elseif newSpeed < 1 then
-                currentSpeed = 1
-                speedTextBox.Text = "1"
-            else
-                currentSpeed = newSpeed
-            end
-        else
-            -- Если введено не число, возвращаем предыдущее значение
-            speedTextBox.Text = tostring(currentSpeed)
-        end
-    end
-end
-
--- Функция перетаскивания
-local function updateDrag(input)
-    local delta = input.Position - dragStart
-    local newX = startPos.X.Offset + delta.X
-    local newY = startPos.Y.Offset + delta.Y
-
-    newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X - speedTextBox.AbsoluteSize.X)
-    newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
-
-    controlButton.Position = UDim2.new(0, newX, 0, newY)
-    speedTextBox.Position = UDim2.new(0, newX + 130, 0, newY)
-end
-
--- Обработчики для перетаскивания
-controlButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragStart = input.Position
-        startPos = controlButton.Position
-        isDragging = true
-        
-        -- Запускаем проверку на отпускание для определения клика
-        task.spawn(function()
-            local startTime = tick()
-            while isDragging do
-                wait()
-                -- Если прошло больше 0.2 секунды, считаем это перетаскиванием
-                if tick() - startTime > 0.2 then
-                    return
+    -- Функция для применения скорости
+    local function applyVelocity()
+        if speedEnabled and character and humanoid then
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            if rootPart then
+                local moveDirection = humanoid.MoveDirection
+                if moveDirection.Magnitude > 0 then
+                    local velocity = moveDirection * currentSpeed
+                    rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
                 end
             end
-        end)
+        end
     end
-end)
 
-controlButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
-    end
-end)
-
-speedTextBox.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragStart = input.Position
-        startPos = controlButton.Position
-        isDragging = true
-    end
-end)
-
-speedTextBox.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragStart then
-        updateDrag(input)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        -- Проверяем, было ли это короткое нажатие (клик) а не перетаскивание
-        if isDragging then
-            local mouse = Players.LocalPlayer:GetMouse()
-            local currentPos = Vector2.new(mouse.X, mouse.Y)
-            local dragDistance = (currentPos - dragStart).Magnitude
-            
-            -- Если расстояние перемещения меньше 5 пикселей, считаем это кликом
-            if dragDistance < 5 then
-                speedEnabled = not speedEnabled
-
-                if speedEnabled then
-                    controlButton.Text = 'SPEED: ON'
-                    TweenService:Create(
-                        controlButton,
-                        TweenInfo.new(0.2),
-                        {BackgroundColor3 = Color3.fromRGB(0, 120, 0)}
-                    ):Play()
+    -- Функция для обновления скорости из текстового поля
+    local function updateSpeedFromTextBox()
+        local text = speedTextBox.Text
+        if text and text ~= "" then
+            local newSpeed = tonumber(text)
+            if newSpeed then
+                if newSpeed > 45 then
+                    currentSpeed = 45
+                    speedTextBox.Text = "45"
+                elseif newSpeed < 1 then
+                    currentSpeed = 1
+                    speedTextBox.Text = "1"
                 else
-                    controlButton.Text = 'SPEED: OFF'
-                    TweenService:Create(
-                        controlButton,
-                        TweenInfo.new(0.2),
-                        {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
-                    ):Play()
+                    currentSpeed = newSpeed
                 end
+            else
+                speedTextBox.Text = tostring(currentSpeed)
             end
         end
-        
-        dragStart = nil
-        isDragging = false
     end
-end)
 
--- Эффект при наведении на кнопку
-controlButton.MouseEnter:Connect(function()
-    if not speedEnabled then
+    -- Функция перетаскивания
+    local function updateDrag(input)
+        local delta = input.Position - dragStart
+        local newX = startPos.X.Offset + delta.X
+        local newY = startPos.Y.Offset + delta.Y
+
+        newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X - speedTextBox.AbsoluteSize.X)
+        newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
+
+        controlButton.Position = UDim2.new(0, newX, 0, newY)
+        speedTextBox.Position = UDim2.new(0, newX + 130, 0, newY)
+    end
+
+    controlButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragStart = input.Position
+            startPos = controlButton.Position
+        end
+    end)
+
+    controlButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    speedTextBox.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragStart = input.Position
+            startPos = controlButton.Position
+        end
+    end)
+
+    speedTextBox.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragStart then
+            updateDrag(input)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragStart = nil
+        end
+    end)
+
+    controlButton.MouseEnter:Connect(function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
             {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
         ):Play()
-    end
-end)
+    end)
 
-controlButton.MouseLeave:Connect(function()
-    if not speedEnabled then
+    controlButton.MouseLeave:Connect(function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
             {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
         ):Play()
+    end)
+
+    controlButton.MouseButton1Click:Connect(function()
+        speedEnabled = not speedEnabled
+        controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
+    end)
+
+    speedTextBox.FocusLost:Connect(function(enterPressed)
+        updateSpeedFromTextBox()
+    end)
+
+    RunService.RenderStepped:Connect(applyVelocity)
+
+    -- Return a cleanup function to destroy the GUI and disconnect events
+    return function()
+        ScreenGui:Destroy()
+        RunService:UnbindFromRenderStep('applyVelocity')
     end
-end)
-
--- Обработчик текстового поля
-speedTextBox.FocusLost:Connect(function(enterPressed)
-    updateSpeedFromTextBox()
-end)
-
--- Применяем скорость каждый кадр
-RunService.RenderStepped:Connect(applyVelocity)
+end
