@@ -30,10 +30,10 @@ return function()
         controlContainer.BackgroundTransparency = 1
         controlContainer.Parent = ScreenGui
 
-        -- Линия для перемещения
+        -- Линия для перемещения (теперь чуть выше основной кнопки)
         local dragHandle = Instance.new('TextButton')
         dragHandle.Size = UDim2.new(1, 0, 0, 10)
-        dragHandle.Position = UDim2.new(0, 0, 0, 10) -- Над контейнером
+        dragHandle.Position = UDim2.new(0, 0, 0, -15) -- Чуть выше (увеличено с -10 до -15)
         dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
         dragHandle.BorderSizePixel = 0
         dragHandle.Text = ""
@@ -47,7 +47,7 @@ return function()
         -- Основная кнопка
         local controlButton = Instance.new('TextButton')
         controlButton.Size = UDim2.new(0, 120, 0, 40)
-        controlButton.Position = UDim2.new(0, 250, 0, 200)
+        controlButton.Position = UDim2.new(0, 0, 0, 0)
         controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
         controlButton.BorderSizePixel = 0
         controlButton.Text = 'SPEED: OFF'
@@ -96,14 +96,16 @@ return function()
         return ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox
     end
 
-    -- Переменные состояния
+    -- Переменные состояния (теперь глобальные для сохранения при респавне)
     local speedEnabled = false
     local currentSpeed = 25
+    local savedPosition = UDim2.new(0, 90, 0, 150) -- Сохраняем позицию по умолчанию
     local dragInput, dragStart, startPos
     local ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox
 
     -- Создаём GUI в начале
     ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
+    controlContainer.Position = savedPosition -- Восстанавливаем позицию
 
     -- Функция для применения скорости
     local function applyVelocity()
@@ -159,6 +161,7 @@ return function()
         newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlContainer.AbsoluteSize.Y)
 
         controlContainer.Position = UDim2.new(0, newX, 0, newY)
+        savedPosition = controlContainer.Position -- Сохраняем новую позицию
     end
 
     -- Обработчики событий перетаскивания
@@ -182,60 +185,65 @@ return function()
         end)
     end
 
-    setupDragging(dragHandle)
-    setupDragging(controlButton)
-    setupDragging(speedTextBox)
+    -- Настройка событий для GUI
+    local function setupGuiEvents()
+        setupDragging(dragHandle)
+        setupDragging(controlButton)
+        setupDragging(speedTextBox)
 
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragStart then
-            updateDrag(input)
-        end
-    end)
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragStart then
+                updateDrag(input)
+            end
+        end)
 
-    -- Эффекты при наведении на линию перетаскивания
-    dragHandle.MouseEnter:Connect(function()
-        TweenService:Create(
-            dragHandle,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}
-        ):Play()
-    end)
+        dragHandle.MouseEnter:Connect(function()
+            TweenService:Create(
+                dragHandle,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}
+            ):Play()
+        end)
 
-    dragHandle.MouseLeave:Connect(function()
-        TweenService:Create(
-            dragHandle,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}
-        ):Play()
-    end)
+        dragHandle.MouseLeave:Connect(function()
+            TweenService:Create(
+                dragHandle,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}
+            ):Play()
+        end)
 
-    -- Эффекты для кнопки
-    controlButton.MouseEnter:Connect(function()
-        TweenService:Create(
-            controlButton,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
-        ):Play()
-    end)
+        controlButton.MouseEnter:Connect(function()
+            TweenService:Create(
+                controlButton,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+            ):Play()
+        end)
 
-    controlButton.MouseLeave:Connect(function()
-        TweenService:Create(
-            controlButton,
-            TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
-        ):Play()
-    end)
+        controlButton.MouseLeave:Connect(function()
+            TweenService:Create(
+                controlButton,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
+            ):Play()
+        end)
 
-    -- Обработчик нажатия кнопки
-    controlButton.MouseButton1Click:Connect(function()
-        speedEnabled = not speedEnabled
+        controlButton.MouseButton1Click:Connect(function()
+            speedEnabled = not speedEnabled
+            controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
+        end)
+
+        speedTextBox.FocusLost:Connect(function(enterPressed)
+            updateSpeedFromTextBox()
+        end)
+
+        -- Восстанавливаем состояние переключателя и скорости
         controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
-    end)
+        speedTextBox.Text = tostring(currentSpeed)
+    end
 
-    -- Обработчик ввода скорости
-    speedTextBox.FocusLost:Connect(function(enterPressed)
-        updateSpeedFromTextBox()
-    end)
+    setupGuiEvents()
 
     -- Обработка респавна персонажа
     player.CharacterAdded:Connect(function(newCharacter)
@@ -246,31 +254,18 @@ return function()
         end
 
         -- Проверяем, существует ли GUI, и воссоздаём при необходимости
-        if not ScreenGui.Parent then
+        if not player.PlayerGui:FindFirstChild('SpeedControl') then
             ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
-            -- Повторно настраиваем события
-            setupDragging(dragHandle)
-            setupDragging(controlButton)
-            setupDragging(speedTextBox)
-            controlButton.MouseEnter:Connect(function()
-                TweenService:Create(controlButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
-            end)
-            controlButton.MouseLeave:Connect(function()
-                TweenService:Create(controlButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}):Play()
-            end)
-            dragHandle.MouseEnter:Connect(function()
-                TweenService:Create(dragHandle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}):Play()
-            end)
-            dragHandle.MouseLeave:Connect(function()
-                TweenService:Create(dragHandle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}):Play()
-            end)
-            controlButton.MouseButton1Click:Connect(function()
-                speedEnabled = not speedEnabled
-                controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
-            end)
-            speedTextBox.FocusLost:Connect(function(enterPressed)
-                updateSpeedFromTextBox()
-            end)
+            controlContainer.Position = savedPosition -- Восстанавливаем сохранённую позицию
+            setupGuiEvents() -- Повторно настраиваем события
+        end
+    end)
+
+    -- Обработка удаления персонажа (перед респавном)
+    player.CharacterRemoving:Connect(function()
+        -- Сохраняем позицию перед удалением
+        if controlContainer then
+            savedPosition = controlContainer.Position
         end
     end)
 
