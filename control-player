@@ -44,7 +44,7 @@ local function restoreCharacterMovement(character)
     originalHumanoidState = nil
 end
 
--- Функция для изменения WebRopes
+-- Функция для изменени WebRopes
 local function modifyWebRopes()
     local workspaceObjects = workspace:GetDescendants()
     local modifiedCount = 0
@@ -212,8 +212,8 @@ local function swapCharacter(targetPlayer)
     originalCharacter = localPlayer.Character
     originalCameraSettings = {
         CameraType = workspace.CurrentCamera.CameraType,
-        CameraSubject = workspace.CurrentCamera.CameraSubject,
-    }
+        CameraSubject = workspace.CurrentCamera.CameraSubject
+    } -- Исправлено: убрана лишняя запятая
 
     -- Останавливаем движение оригинального персонажа
     stopCharacterMovement(originalCharacter)
@@ -289,10 +289,11 @@ screenGui.Parent = player:WaitForChild('PlayerGui')
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основная кнопка
+-- Основная кнопка - позиция чуть левее середины экрана
 local controlButton = Instance.new('TextButton')
 controlButton.Size = UDim2.new(0, 150, 0, 40)
-controlButton.Position = UDim2.new(0, 10, 0, 10)
+controlButton.AnchorPoint = Vector2.new(0.5, 0.5) -- Устанавливаем якорь в центр кнопки
+controlButton.Position = UDim2.new(0.3, 0, 0.25, 0) -- 40% от ширины (чуть левее середины), 50% от высоты (середина)
 controlButton.BackgroundColor3 = mainColor
 controlButton.BorderSizePixel = 0
 controlButton.Text = 'Control Player'
@@ -339,13 +340,13 @@ local function update(input)
     end
 
     local delta = input.Position - dragStart
-    local newX = startPos.X.Offset + delta.X
-    local newY = startPos.Y.Offset + delta.Y
+    local newX = startPos.X.Scale + (delta.X / screenGui.AbsoluteSize.X)
+    local newY = startPos.Y.Scale + (delta.Y / screenGui.AbsoluteSize.Y)
 
-    newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
-    newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
+    newX = math.clamp(newX, 0, 1)
+    newY = math.clamp(newY, 0, 1)
 
-    controlButton.Position = UDim2.new(0, newX, 0, newY)
+    controlButton.Position = UDim2.new(newX, 0, newY, 0)
 end
 
 controlButton.InputBegan:Connect(function(input)
