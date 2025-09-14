@@ -1,0 +1,103 @@
+-- Инжект скрипт для подключения к новым серверам Roblox
+local gameId = 109983668079237
+
+-- Функция для получения информации о серверах
+local function getServers()
+    local url = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Asc&limit=100"
+    
+    local success, result = pcall(function()
+        return game:HttpGetAsync(url)
+    end)
+    
+    if success then
+        local data = game:GetService("HttpService"):JSONDecode(result)
+        return data.data
+    else
+        warn("Ошибка при получении списка серверов:", result)
+        return {}
+    end
+end
+
+-- Функция для подключения к серверу
+local function connectToServer(jobId)
+    game:GetService("TeleportService"):TeleportToPlaceInstance(gameId, jobId, game.Players.LocalPlayer)
+end
+
+-- Основная функция
+local function joinNewestServer()
+    local servers = getServers()
+    
+    if #servers == 0 then
+        warn("Не удалось получить список серверов")
+        return
+    end
+    
+    -- Сортируем серверы по времени создания (новые сначала)
+    table.sort(servers, function(a, b)
+        return a.playing > b.playing  -- Предпочтем серверы с меньшим количеством игроков
+    end)
+    
+    -- Ищем самый новый сервер с свободными местами
+    for _, server in ipairs(servers) do
+        if server.playing < server.maxPlayers and server.id then
+            print("Подключаемся к серверу:", server.id, "Игроков:", server.playing .. "/" .. server.maxPlayers)
+            connectToServer(server.id)
+            return
+        end
+    end
+    
+    -- Если все серверы заполнены, подключаемся к самому новому
+    if servers[1] and servers[1].id then
+        print("Все серверы заполнены, подключаемся к самому новому")
+        connectToServer(servers[1].id)
+    end
+end
+
+-- Автоматическое выполнение при инжекте
+if game.PlaceId == gameId then
+    print("Уже в игре, пытаемся найти новый сервер...")
+    joinNewestServer()
+else
+    print("Телепортируемся в игру и ищем новый сервер...")
+    game:GetService("TeleportService"):Teleport(gameId)
+    
+    -- Ожидаем телепортации и затем ищем новый сервер
+    game:GetService("TeleportService").TeleportInitiated:Connect(function()
+        wait(3) -- Даем время для загрузки
+        joinNewestServer()
+    end)
+end
+
+-- Создаем GUI элемент для ручного управления
+local function createGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ServerJoiner"
+    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 200, 0, 100)
+    frame.Position = UDim2.new(0, 10, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.Parent = screenGui
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 180, 0, 60)
+    button.Position = UDim2.new(0, 10, 0, 30)
+    button.Text = "Найти новый сервер"
+    button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.SourceSansBold
+    button.TextSize = 16
+    button.Parent = frame
+    
+    button.MouseButton1Click:Connect(joinNewestServer)
+end
+
+-- Задержка перед созданием GUI
+spawn(function()
+    wait(5)
+    createGUI()
+    print("GUI создан. Нажмите кнопку 'Найти новый сервер' для подключения")
+end)
+
+print("Скрипт успешно загружен! Ищем новые серверы игры...")
