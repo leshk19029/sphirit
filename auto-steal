@@ -15,11 +15,11 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Основная кнопка
 local controlButton = Instance.new('TextButton')
-controlButton.Size = UDim2.new(0, 100, 0, 40)
+controlButton.Size = UDim2.new(0, 120, 0, 40)
 controlButton.Position = UDim2.new(0, 10, 0, 10)
 controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 controlButton.BorderSizePixel = 0
-controlButton.Text = 'OFF'
+controlButton.Text = 'SPEED: OFF'
 controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 controlButton.Font = Enum.Font.Code
 controlButton.TextSize = 14
@@ -39,7 +39,7 @@ controlButtonStroke.Parent = controlButton
 -- Текстовое поле для ввода скорости
 local speedTextBox = Instance.new('TextBox')
 speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-speedTextBox.Position = UDim2.new(0, 120, 0, 10)
+speedTextBox.Position = UDim2.new(0, 140, 0, 10)
 speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 speedTextBox.BorderSizePixel = 0
 speedTextBox.Text = '25'
@@ -113,7 +113,7 @@ local function updateDrag(input)
     newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
 
     controlButton.Position = UDim2.new(0, newX, 0, newY)
-    speedTextBox.Position = UDim2.new(0, newX + 110, 0, newY)
+    speedTextBox.Position = UDim2.new(0, newX + 130, 0, newY)
 end
 
 controlButton.InputBegan:Connect(function(input)
@@ -176,9 +176,9 @@ controlButton.MouseButton1Click:Connect(function()
     speedEnabled = not speedEnabled
 
     if speedEnabled then
-        controlButton.Text = 'ON'
+        controlButton.Text = 'SPEED: ON'
     else
-        controlButton.Text = 'OFF'
+        controlButton.Text = 'SPEED: OFF'
     end
 end)
 
