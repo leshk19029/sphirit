@@ -32,8 +32,8 @@ return function()
 
         -- Линия для перемещения (чуть выше основной кнопки)
         local dragHandle = Instance.new('TextButton')
-        dragHandle.Size = UDim2.new(1, 0, 0, 10)
-        dragHandle.Position = UDim2.new(0, 0, 0, -15) -- Увеличено до -20 для большей высоты
+        dragHandle.Size = UDim2.new(1, 0, 0, 15)
+        dragHandle.Position = UDim2.new(0, 0, 0, -10) -- Увеличено до -20 для большей высоты
         dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
         dragHandle.BorderSizePixel = 0
         dragHandle.Text = ""
