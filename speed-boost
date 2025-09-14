@@ -16,32 +16,29 @@ return function()
 
     -- Контейнер для элементов управления
     local controlContainer = Instance.new('Frame')
-    controlContainer.Size = UDim2.new(0, 180, 0, 70)  -- Увеличили высоту контейнера
+    controlContainer.Size = UDim2.new(0, 180, 0, 50)  -- Вернули исходную высоту
     controlContainer.Position = UDim2.new(0, 10, 0, 10)
     controlContainer.BackgroundTransparency = 1
     controlContainer.Parent = ScreenGui
 
-    -- Линия для перемещения (расположена сверху, еще больше увеличена высота)
+    -- Линия для перемещения (уменьшена вдвое и поднята выше)
     local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(1, 0, 0, 30)  -- Увеличили высоту до 30 пикселей
-    dragHandle.Position = UDim2.new(0, 0, 0, 0)
-    dragHandle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    dragHandle.Size = UDim2.new(1, 0, 0, 5)  -- Уменьшили высоту вдвое до 5 пикселей
+    dragHandle.Position = UDim2.new(0, 0, 0, -5)  -- Подняли выше на 5 пикселей
+    dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     dragHandle.BorderSizePixel = 0
-    dragHandle.Text = "≡ ПЕРЕТАЩИТЕ ДЛЯ ПЕРЕМЕЩЕНИЯ ≡"
-    dragHandle.TextColor3 = Color3.fromRGB(200, 200, 200)
-    dragHandle.Font = Enum.Font.Code
-    dragHandle.TextSize = 12
+    dragHandle.Text = ""
     dragHandle.AutoButtonColor = false
     dragHandle.Parent = controlContainer
 
     local dragHandleCorner = Instance.new('UICorner')
-    dragHandleCorner.CornerRadius = UDim.new(0, 6)
+    dragHandleCorner.CornerRadius = UDim.new(0, 3)
     dragHandleCorner.Parent = dragHandle
 
     -- Основная кнопка
     local controlButton = Instance.new('TextButton')
     controlButton.Size = UDim2.new(0, 120, 0, 40)
-    controlButton.Position = UDim2.new(0, 0, 0, 30)  -- Сдвинули вниз из-за увеличенной линии
+    controlButton.Position = UDim2.new(0, 0, 0, 0)  -- Вернули в исходное положение
     controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     controlButton.BorderSizePixel = 0
     controlButton.Text = 'SPEED: OFF'
@@ -64,7 +61,7 @@ return function()
     -- Текстовое поле для ввода скорости
     local speedTextBox = Instance.new('TextBox')
     speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-    speedTextBox.Position = UDim2.new(0, 130, 0, 30)  -- Сдвинули вниз из-за увеличенной линии
+    speedTextBox.Position = UDim2.new(0, 130, 0, 0)  -- Вернули в исходное положение
     speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     speedTextBox.BorderSizePixel = 0
     speedTextBox.Text = '25'
@@ -184,7 +181,7 @@ return function()
         TweenService:Create(
             dragHandle,
             TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}
+            {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}
         ):Play()
     end)
 
@@ -192,7 +189,7 @@ return function()
         TweenService:Create(
             dragHandle,
             TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}
+            {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}
         ):Play()
     end)
 
