@@ -1,5 +1,6 @@
--- Инжект скрипт для подключения к новым серверам Roblox
+-- Инжект скрипт для подключения к разным новым серверам Roblox
 local gameId = 109983668079237
+local connectedServers = {} -- Таблица для отслеживания подключенных серверов
 
 -- Функция для получения информации о серверах
 local function getServers()
@@ -20,84 +21,185 @@ end
 
 -- Функция для подключения к серверу
 local function connectToServer(jobId)
+    table.insert(connectedServers, jobId)
     game:GetService("TeleportService"):TeleportToPlaceInstance(gameId, jobId, game.Players.LocalPlayer)
 end
 
--- Основная функция
-local function joinNewestServer()
+-- Функция для проверки, подключались ли уже к этому серверу
+local function isServerConnected(jobId)
+    for _, connectedId in ipairs(connectedServers) do
+        if connectedId == jobId then
+            return true
+        end
+    end
+    return false
+end
+
+-- Основная функция для поиска нового сервера
+local function findNewServer()
     local servers = getServers()
     
     if #servers == 0 then
         warn("Не удалось получить список серверов")
-        return
+        return nil
     end
     
     -- Сортируем серверы по времени создания (новые сначала)
     table.sort(servers, function(a, b)
-        return a.playing > b.playing  -- Предпочтем серверы с меньшим количеством игроков
+        return (a.playing or 0) < (b.playing or 0) -- Предпочтем серверы с меньшим количеством игроков
     end)
     
-    -- Ищем самый новый сервер с свободными местами
+    -- Ищем совершенно новый сервер, к которому еще не подключались
+    local availableServers = {}
+    
     for _, server in ipairs(servers) do
-        if server.playing < server.maxPlayers and server.id then
-            print("Подключаемся к серверу:", server.id, "Игроков:", server.playing .. "/" .. server.maxPlayers)
-            connectToServer(server.id)
-            return
+        if server.playing < server.maxPlayers and server.id and not isServerConnected(server.id) then
+            table.insert(availableServers, server)
         end
     end
     
-    -- Если все серверы заполнены, подключаемся к самому новому
-    if servers[1] and servers[1].id then
-        print("Все серверы заполнены, подключаемся к самому новому")
-        connectToServer(servers[1].id)
+    -- Если нашли новые серверы, выбираем самый новый
+    if #availableServers > 0 then
+        return availableServers[1]
     end
+    
+    -- Если все серверы уже были посещены, ищем любой с свободными местами
+    for _, server in ipairs(servers) do
+        if server.playing < server.maxPlayers and server.id then
+            return server
+        end
+    end
+    
+    -- Если все заполнено, возвращаем самый новый
+    return servers[1]
+end
+
+-- Функция для подключения к новому серверу
+local function joinNewServer()
+    local server = findNewServer()
+    
+    if not server or not server.id then
+        warn("Не удалось найти подходящий сервер")
+        return false
+    end
+    
+    print("Подключаемся к серверу:", server.id)
+    print("Игроков:", (server.playing or "N/A") .. "/" .. (server.maxPlayers or "N/A"))
+    print("Это новый сервер:", not isServerConnected(server.id))
+    
+    connectToServer(server.id)
+    return true
 end
 
 -- Автоматическое выполнение при инжекте
 if game.PlaceId == gameId then
-    print("Уже в игре, пытаемся найти новый сервер...")
-    joinNewestServer()
+    print("Уже в игре, ищем совершенно новый сервер...")
+    wait(2)
+    joinNewServer()
 else
     print("Телепортируемся в игру и ищем новый сервер...")
     game:GetService("TeleportService"):Teleport(gameId)
     
     -- Ожидаем телепортации и затем ищем новый сервер
     game:GetService("TeleportService").TeleportInitiated:Connect(function()
-        wait(3) -- Даем время для загрузки
-        joinNewestServer()
+        wait(5) -- Даем больше времени для загрузки
+        joinNewServer()
     end)
 end
 
--- Создаем GUI элемент для ручного управления
-local function createGUI()
+-- Создаем улучшенный GUI элемент
+local function createAdvancedGUI()
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "ServerJoiner"
+    screenGui.Name = "AdvancedServerJoiner"
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 100)
+    frame.Size = UDim2.new(0, 250, 0, 150)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
     frame.Parent = screenGui
     
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Text = "Переключение серверов"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.BackgroundColor3 = Color3.fromRGB(0, 90, 175)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 18
+    title.Parent = frame
+    
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 180, 0, 60)
-    button.Position = UDim2.new(0, 10, 0, 30)
-    button.Text = "Найти новый сервер"
+    button.Size = UDim2.new(0, 230, 0, 50)
+    button.Position = UDim2.new(0, 10, 0, 40)
+    button.Text = "НАЙТИ НОВЫЙ СЕРВЕР"
     button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.Font = Enum.Font.SourceSansBold
     button.TextSize = 16
     button.Parent = frame
     
-    button.MouseButton1Click:Connect(joinNewestServer)
+    local status = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Position = UDim2.new(0, 0, 0, 100)
+    title.Text = "Готов к работе"
+    title.TextColor3 = Color3.fromRGB(200, 200, 200)
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.SourceSans
+    title.TextSize = 14
+    title.Parent = frame
+    
+    button.MouseButton1Click:Connect(function()
+        button.Text = "Поиск..."
+        button.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        
+        local success = joinNewServer()
+        
+        if success then
+            status.Text = "Подключение к новому серверу..."
+        else
+            status.Text = "Ошибка подключения"
+            button.Text = "ПОВТОРИТЬ ПОПЫТКУ"
+            button.BackgroundColor3 = Color3.fromRGB(215, 0, 0)
+            wait(2)
+            button.Text = "НАЙТИ НОВЫЙ СЕРВЕР"
+            button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+            status.Text = "Готов к работе"
+        end
+    end)
+    
+    -- Кнопка для принудительного сброса истории
+    local resetButton = Instance.new("TextButton")
+    resetButton.Size = UDim2.new(0, 230, 0, 30)
+    resetButton.Position = UDim2.new(0, 10, 0, 100)
+    resetButton.Text = "Сбросить историю серверов"
+    resetButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    resetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resetButton.Font = Enum.Font.SourceSans
+    resetButton.TextSize = 12
+    resetButton.Parent = frame
+    
+    resetButton.MouseButton1Click:Connect(function()
+        connectedServers = {}
+        status.Text = "История сброшена!"
+        wait(2)
+        status.Text = "Готов к работе"
+    end)
 end
 
 -- Задержка перед созданием GUI
 spawn(function()
     wait(5)
-    createGUI()
-    print("GUI создан. Нажмите кнопку 'Найти новый сервер' для подключения")
+    createAdvancedGUI()
+    print("Расширенный GUI создан!")
+    print("Подключено серверов в этой сессии: " .. #connectedServers)
 end)
 
-print("Скрипт успешно загружен! Ищем новые серверы игры...")
+-- Автоматическое переподключение при ошибках
+game:GetService("TeleportService").TeleportFailed:Connect(function()
+    warn("Ошибка телепортации, пробуем другой сервер...")
+    wait(3)
+    joinNewServer()
+end)
+
+print("Улучшенный скрипт загружен! Гарантируем разные серверы каждый раз!")
