@@ -8,27 +8,26 @@ return function()
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild('Humanoid')
 
-    -- Создаем основной GUI (изначально скрытый)
+    -- Создаем основной GUI
     local ScreenGui = Instance.new('ScreenGui')
     ScreenGui.Name = 'SpeedControl'
     ScreenGui.Parent = player.PlayerGui
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Enabled = false -- Изначально отключен
 
     -- Контейнер для элементов управления
     local controlContainer = Instance.new('Frame')
     controlContainer.Size = UDim2.new(0, 180, 0, 50)
-    controlContainer.Position = UDim2.new(0, 220, 0, 220)
+    controlContainer.Position = UDim2.new(0, 10, 0, 10)
     controlContainer.BackgroundTransparency = 1
     controlContainer.Parent = ScreenGui
 
-    -- Линия для перемещения
+    -- Линия для перемещения (высота 10 пикселей, позиция на 10 выше)
     local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(1, 0, 0, 10)
-    dragHandle.Position = UDim2.new(0, 0, 0, -20)
+    dragHandle.Size = UDim2.new(1, 0, 0, 10)  -- Высота 10 пикселей
+    dragHandle.Position = UDim2.new(0, 220, 0, 250)  -- На 20 пикселей выше (10 выше + 10 высота)
     dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     dragHandle.BorderSizePixel = 0
-    dragHandle.Text = ''
+    dragHandle.Text = ""  -- Текст удален
     dragHandle.AutoButtonColor = false
     dragHandle.Parent = controlContainer
 
@@ -89,13 +88,6 @@ return function()
     local speedEnabled = false
     local currentSpeed = 25
     local dragInput, dragStart, startPos
-    local guiVisible = false
-
-    -- Функция для показа/скрытия GUI
-    local function toggleGUI()
-        guiVisible = not guiVisible
-        ScreenGui.Enabled = guiVisible
-    end
 
     -- Функция для применения скорости
     local function applyVelocity()
@@ -105,8 +97,7 @@ return function()
                 local moveDirection = humanoid.MoveDirection
                 if moveDirection.Magnitude > 0 then
                     local velocity = moveDirection * currentSpeed
-                    rootPart.Velocity =
-                        Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
+                    rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
                 end
             end
         end
@@ -115,15 +106,15 @@ return function()
     -- Функция для обновления скорости из текстового поля
     local function updateSpeedFromTextBox()
         local text = speedTextBox.Text
-        if text and text ~= '' then
+        if text and text ~= "" then
             local newSpeed = tonumber(text)
             if newSpeed then
                 if newSpeed > 45 then
                     currentSpeed = 45
-                    speedTextBox.Text = '45'
+                    speedTextBox.Text = "45"
                 elseif newSpeed < 1 then
                     currentSpeed = 1
-                    speedTextBox.Text = '1'
+                    speedTextBox.Text = "1"
                 else
                     currentSpeed = newSpeed
                 end
@@ -139,21 +130,13 @@ return function()
         local newX = startPos.X.Offset + delta.X
         local newY = startPos.Y.Offset + delta.Y
 
-        newX = math.clamp(
-            newX,
-            0,
-            ScreenGui.AbsoluteSize.X - controlContainer.AbsoluteSize.X
-        )
-        newY = math.clamp(
-            newY,
-            0,
-            ScreenGui.AbsoluteSize.Y - controlContainer.AbsoluteSize.Y
-        )
+        newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlContainer.AbsoluteSize.X)
+        newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlContainer.AbsoluteSize.Y)
 
         controlContainer.Position = UDim2.new(0, newX, 0, newY)
     end
 
-    -- Обработчики событий перетаскивания
+    -- Обработчики событий перетаскивания для линии
     dragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragStart = input.Position
@@ -172,6 +155,7 @@ return function()
         end
     end)
 
+    -- Обработчики для кнопки и текстового поля (для перетаскивания за них)
     controlButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragStart = input.Position
@@ -192,26 +176,12 @@ return function()
         end
     end)
 
-    -- Обработчик горячей клавиши (например, Right Control)
-    local toggleConnection
-    toggleConnection = UserInputService.InputBegan:Connect(
-        function(input, gameProcessed)
-            if gameProcessed then
-                return
-            end
-
-            if input.KeyCode == Enum.KeyCode.RightControl then
-                toggleGUI()
-            end
-        end
-    )
-
-    -- Эффекты при наведении
+    -- Эффекты при наведении на линию перетаскивания
     dragHandle.MouseEnter:Connect(function()
         TweenService:Create(
             dragHandle,
             TweenInfo.new(0.2),
-            { BackgroundColor3 = Color3.fromRGB(100, 100, 100) }
+            {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}
         ):Play()
     end)
 
@@ -219,7 +189,7 @@ return function()
         TweenService:Create(
             dragHandle,
             TweenInfo.new(0.2),
-            { BackgroundColor3 = Color3.fromRGB(80, 80, 80) }
+            {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}
         ):Play()
     end)
 
@@ -228,7 +198,7 @@ return function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
-            { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }
+            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
         ):Play()
     end)
 
@@ -236,7 +206,7 @@ return function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
-            { BackgroundColor3 = Color3.fromRGB(25, 25, 25) }
+            {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
         ):Play()
     end)
 
@@ -251,11 +221,8 @@ return function()
 
     RunService.RenderStepped:Connect(applyVelocity)
 
-    -- Return a cleanup function
+    -- Return a cleanup function to destroy the GUI and disconnect events
     return function()
         ScreenGui:Destroy()
-        if toggleConnection then
-            toggleConnection:Disconnect()
-        end
     end
 end
