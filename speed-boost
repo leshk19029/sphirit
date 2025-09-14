@@ -16,18 +16,18 @@ return function()
 
     -- Контейнер для элементов управления
     local controlContainer = Instance.new('Frame')
-    controlContainer.Size = UDim2.new(0, 180, 0, 50)  -- Вернули исходную высоту
+    controlContainer.Size = UDim2.new(0, 180, 0, 50)
     controlContainer.Position = UDim2.new(0, 10, 0, 10)
     controlContainer.BackgroundTransparency = 1
     controlContainer.Parent = ScreenGui
 
-    -- Линия для перемещения (уменьшена вдвое и поднята выше)
+    -- Линия для перемещения (на 10 пикселей выше, высота уменьшена вдвое)
     local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(1, 0, 0, 5)  -- Уменьшили высоту вдвое до 5 пикселей
-    dragHandle.Position = UDim2.new(0, 0, 0, -5)  -- Подняли выше на 5 пикселей
+    dragHandle.Size = UDim2.new(1, 0, 0, 5)  -- Высота 5 пикселей (вдвое меньше)
+    dragHandle.Position = UDim2.new(0, 0, 0, -10)  -- На 10 пикселей выше
     dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     dragHandle.BorderSizePixel = 0
-    dragHandle.Text = ""
+    dragHandle.Text = ""  -- Текст удален
     dragHandle.AutoButtonColor = false
     dragHandle.Parent = controlContainer
 
@@ -38,7 +38,7 @@ return function()
     -- Основная кнопка
     local controlButton = Instance.new('TextButton')
     controlButton.Size = UDim2.new(0, 120, 0, 40)
-    controlButton.Position = UDim2.new(0, 0, 0, 0)  -- Вернули в исходное положение
+    controlButton.Position = UDim2.new(0, 0, 0, 0)
     controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     controlButton.BorderSizePixel = 0
     controlButton.Text = 'SPEED: OFF'
@@ -61,7 +61,7 @@ return function()
     -- Текстовое поле для ввода скорости
     local speedTextBox = Instance.new('TextBox')
     speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-    speedTextBox.Position = UDim2.new(0, 130, 0, 0)  -- Вернули в исходное положение
+    speedTextBox.Position = UDim2.new(0, 130, 0, 0)
     speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     speedTextBox.BorderSizePixel = 0
     speedTextBox.Text = '25'
