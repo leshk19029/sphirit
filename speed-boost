@@ -10,7 +10,6 @@ return function()
 
     -- Проверка на существование humanoid
     if not humanoid then
-        warn("Humanoid не найден!")
         return function() end
     end
 
@@ -33,10 +32,10 @@ return function()
         -- Линия для перемещения (чуть ниже и выше по размеру)
         local dragHandle = Instance.new('TextButton')
         dragHandle.Size = UDim2.new(1, 0, 0, 15) -- Увеличена высота до 15
-        dragHandle.Position = UDim2.new(0, 0, 0, -10) -- Чуть ниже (-10 вместо -20)
+        dragHandle.Position = UDim2.new(0, 0, 0, -20) -- Чуть ниже (-10 вместо -20)
         dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
         dragHandle.BorderSizePixel = 0
-        dragHandle.Text = ""
+        dragHandle.Text = ''
         dragHandle.AutoButtonColor = false
         dragHandle.Parent = controlContainer
 
@@ -93,7 +92,11 @@ return function()
         speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
         speedTextBoxStroke.Parent = speedTextBox
 
-        return ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox
+        return ScreenGui,
+            controlContainer,
+            dragHandle,
+            controlButton,
+            speedTextBox
     end
 
     -- Переменные состояния
@@ -105,25 +108,31 @@ return function()
     local velocityConnection
 
     -- Создаём GUI в начале
-    ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
+    ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox =
+        createGui()
     controlContainer.Position = savedPosition -- Восстанавливаем позицию
 
     -- Функция для применения скорости
     local function applyVelocity()
-        if not speedEnabled or not character or not humanoid or not humanoid.Parent then
+        if
+            not speedEnabled
+            or not character
+            or not humanoid
+            or not humanoid.Parent
+        then
             return
         end
 
         local rootPart = character:FindFirstChild('HumanoidRootPart')
         if not rootPart then
-            warn("HumanoidRootPart не найден!")
             return
         end
 
         local moveDirection = humanoid.MoveDirection
         if moveDirection.Magnitude > 0 then
             local velocity = moveDirection * currentSpeed
-            rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
+            rootPart.Velocity =
+                Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
         else
             rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0) -- Сбрасываем горизонтальную скорость
         end
@@ -132,34 +141,43 @@ return function()
     -- Функция для обновления скорости из текстового поля
     local function updateSpeedFromTextBox()
         local text = speedTextBox.Text
-        if text and text ~= "" then
+        if text and text ~= '' then
             local newSpeed = tonumber(text)
             if newSpeed then
                 if newSpeed > 45 then
                     currentSpeed = 45
-                    speedTextBox.Text = "45"
+                    speedTextBox.Text = '45'
                 elseif newSpeed < 1 then
                     currentSpeed = 1
-                    speedTextBox.Text = "1"
+                    speedTextBox.Text = '1'
                 else
                     currentSpeed = newSpeed
                 end
             else
                 speedTextBox.Text = tostring(currentSpeed)
-                warn("Введено некорректное значение скорости!")
             end
         end
     end
 
     -- Функция перетаскивания
     local function updateDrag(input)
-        if not dragStart then return end
+        if not dragStart then
+            return
+        end
         local delta = input.Position - dragStart
         local newX = startPos.X.Offset + delta.X
         local newY = startPos.Y.Offset + delta.Y
 
-        newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - controlContainer.AbsoluteSize.X)
-        newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - controlContainer.AbsoluteSize.Y)
+        newX = math.clamp(
+            newX,
+            0,
+            ScreenGui.AbsoluteSize.X - controlContainer.AbsoluteSize.X
+        )
+        newY = math.clamp(
+            newY,
+            0,
+            ScreenGui.AbsoluteSize.Y - controlContainer.AbsoluteSize.Y
+        )
 
         controlContainer.Position = UDim2.new(0, newX, 0, newY)
         savedPosition = controlContainer.Position -- Сохраняем новую позицию
@@ -202,7 +220,7 @@ return function()
             TweenService:Create(
                 dragHandle,
                 TweenInfo.new(0.2),
-                {BackgroundColor3 = Color3.fromRGB(100, 100, 100)}
+                { BackgroundColor3 = Color3.fromRGB(100, 100, 100) }
             ):Play()
         end)
 
@@ -210,7 +228,7 @@ return function()
             TweenService:Create(
                 dragHandle,
                 TweenInfo.new(0.2),
-                {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}
+                { BackgroundColor3 = Color3.fromRGB(80, 80, 80) }
             ):Play()
         end)
 
@@ -218,7 +236,7 @@ return function()
             TweenService:Create(
                 controlButton,
                 TweenInfo.new(0.2),
-                {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+                { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }
             ):Play()
         end)
 
@@ -226,7 +244,7 @@ return function()
             TweenService:Create(
                 controlButton,
                 TweenInfo.new(0.2),
-                {BackgroundColor3 = Color3.fromRGB(25, 25, 25)}
+                { BackgroundColor3 = Color3.fromRGB(25, 25, 25) }
             ):Play()
         end)
 
@@ -251,12 +269,12 @@ return function()
         character = newCharacter
         humanoid = newCharacter:WaitForChild('Humanoid', 5)
         if not humanoid then
-            warn("Humanoid не найден после смены персонажа!")
         end
 
         -- Проверяем, существует ли GUI, и воссоздаём при необходимости
         if not player.PlayerGui:FindFirstChild('SpeedControl') then
-            ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox = createGui()
+            ScreenGui, controlContainer, dragHandle, controlButton, speedTextBox =
+                createGui()
             controlContainer.Position = savedPosition -- Восстанавливаем сохранённую позицию
             setupGuiEvents() -- Повторно настраиваем события
         end
