@@ -43,7 +43,7 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Создаем кружочек для открытия/закрытия меню
 local toggleButton = Instance.new('TextButton')
-toggleButton.Size = UDim2.new(0, 60, 0, 60)
+toggleButton.Size = UDim2.new(0, 51, 0, 51)
 toggleButton.Position = UDim2.new(0, 10, 0, 10)
 toggleButton.BackgroundColor3 = mainColor
 toggleButton.BorderSizePixel = 0
