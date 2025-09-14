@@ -21,10 +21,10 @@ return function()
     controlContainer.BackgroundTransparency = 1
     controlContainer.Parent = ScreenGui
 
-    -- Линия для перемещения (высота 10 пикселей)
+    -- Линия для перемещения (высота 10 пикселей, позиция на 10 выше)
     local dragHandle = Instance.new('TextButton')
     dragHandle.Size = UDim2.new(1, 0, 0, 10)  -- Высота 10 пикселей
-    dragHandle.Position = UDim2.new(0, 0, 0, -15)  -- На 10 пикселей выше
+    dragHandle.Position = UDim2.new(0, 0, 0, -20)  -- На 20 пикселей выше (10 выше + 10 высота)
     dragHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     dragHandle.BorderSizePixel = 0
     dragHandle.Text = ""  -- Текст удален
