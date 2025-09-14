@@ -251,12 +251,23 @@ end
 
 -- Speed-Boost functionality
 local speedBoostCleanup = nil
+local speedBoostModule = nil
 
 local function loadSpeedBoost()
-    return safeLoad(
+    if speedBoostModule then
+        return speedBoostModule
+    end
+    
+    local func = safeLoad(
         'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost',
         'SpeedBoost'
     )
+    
+    if func then
+        speedBoostModule = func
+    end
+    
+    return speedBoostModule
 end
 
 local function startSpeedBoost()
@@ -266,9 +277,22 @@ local function startSpeedBoost()
 
     local func = loadSpeedBoost()
     if func then
-        -- Скрипт скорости уже выполнился при загрузке, просто отмечаем как активный
-        functionStates.SpeedBoost = true
-        return true
+        -- Только выполняем функцию если она еще не выполнялась
+        if type(func) == "function" then
+            local success, result = pcall(func)
+            if success then
+                functionStates.SpeedBoost = true
+                speedBoostCleanup = result
+                return true
+            else
+                warn('SpeedBoost execution failed:', result)
+                return false
+            end
+        else
+            -- Если это не функция, значит она уже выполнилась
+            functionStates.SpeedBoost = true
+            return true
+        end
     else
         warn('SpeedBoost loading failed')
         return false
@@ -276,17 +300,26 @@ local function startSpeedBoost()
 end
 
 local function stopSpeedBoost()
-    -- Для speed-boost мы не можем "остановить" выполненный код, 
-    -- но можем перезагрузить персонажа или сбросить скорость
+    -- Пытаемся почистить если есть функция очистки
+    if speedBoostCleanup and type(speedBoostCleanup) == "function" then
+        pcall(speedBoostCleanup)
+        speedBoostCleanup = nil
+    end
+    
     functionStates.SpeedBoost = false
     
-    -- Попытка сбросить скорость персонажа
+    -- Сбрасываем скорость персонажа
     pcall(function()
         local character = player.Character
         if character then
             local humanoid = character:FindFirstChild('Humanoid')
             if humanoid then
                 humanoid.WalkSpeed = 16 -- Стандартная скорость
+            end
+            
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            if rootPart then
+                rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 0, rootPart.Velocity.Z)
             end
         end
     end)
