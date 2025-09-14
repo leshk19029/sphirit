@@ -19,7 +19,7 @@ controlButton.Size = UDim2.new(0, 100, 0, 40)
 controlButton.Position = UDim2.new(0, 10, 0, 10)
 controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 controlButton.BorderSizePixel = 0
-controlButton.Text = 'OFF'
+controlButton.Text = 'SPEED: OFF'
 controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 controlButton.Font = Enum.Font.Code
 controlButton.TextSize = 14
@@ -176,9 +176,9 @@ controlButton.MouseButton1Click:Connect(function()
     speedEnabled = not speedEnabled
 
     if speedEnabled then
-        controlButton.Text = 'ON'
+        controlButton.Text = 'SPEED: ON'
     else
-        controlButton.Text = 'OFF'
+        controlButton.Text = 'SPEED: OFF'
     end
 end)
 
