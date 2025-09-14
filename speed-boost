@@ -14,16 +14,62 @@ return function()
     ScreenGui.Parent = player.PlayerGui
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Контейнер для элементов (для удобного перемещения)
-    local container = Instance.new('Frame')
-    container.Size = UDim2.new(0, 200, 0, 40)
-    container.Position = UDim2.new(0, 10, 0, 10)
-    container.BackgroundTransparency = 1
-    container.Parent = ScreenGui
+    -- Основной контейнер
+    local mainContainer = Instance.new('Frame')
+    mainContainer.Size = UDim2.new(0, 200, 0, 60)
+    mainContainer.Position = UDim2.new(0, 10, 0, 10)
+    mainContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mainContainer.BorderSizePixel = 0
+    mainContainer.Parent = ScreenGui
+
+    local mainContainerCorner = Instance.new('UICorner')
+    mainContainerCorner.CornerRadius = UDim.new(0, 6)
+    mainContainerCorner.Parent = mainContainer
+
+    local mainContainerStroke = Instance.new('UIStroke')
+    mainContainerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    mainContainerStroke.Color = Color3.fromRGB(50, 50, 50)
+    mainContainerStroke.Thickness = 2
+    mainContainerStroke.LineJoinMode = Enum.LineJoinMode.Round
+    mainContainerStroke.Parent = mainContainer
+
+    -- Полоска для перемещения
+    local dragBar = Instance.new('TextButton')
+    dragBar.Size = UDim2.new(1, 0, 0, 20)
+    dragBar.Position = UDim2.new(0, 0, 0, 0)
+    dragBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    dragBar.BorderSizePixel = 0
+    dragBar.Text = ""
+    dragBar.Parent = mainContainer
+
+    local dragBarCorner = Instance.new('UICorner')
+    dragBarCorner.CornerRadius = UDim.new(0, 6)
+    dragBarCorner.Parent = dragBar
+
+    -- Точки на полоске для визуального обозначения
+    for i = 1, 3 do
+        local dot = Instance.new('Frame')
+        dot.Size = UDim2.new(0, 4, 0, 2)
+        dot.Position = UDim2.new(0.2 * i, 0, 0.5, -1)
+        dot.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+        dot.BorderSizePixel = 0
+        dot.Parent = dragBar
+        
+        local dotCorner = Instance.new('UICorner')
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = dot
+    end
+
+    -- Контейнер для элементов управления
+    local controlsContainer = Instance.new('Frame')
+    controlsContainer.Size = UDim2.new(1, -10, 0, 40)
+    controlsContainer.Position = UDim2.new(0, 5, 0, 25)
+    controlsContainer.BackgroundTransparency = 1
+    controlsContainer.Parent = mainContainer
 
     -- Основная кнопка
     local controlButton = Instance.new('TextButton')
-    controlButton.Size = UDim2.new(0, 120, 0, 40)
+    controlButton.Size = UDim2.new(0, 120, 1, 0)
     controlButton.Position = UDim2.new(0, 0, 0, 0)
     controlButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     controlButton.BorderSizePixel = 0
@@ -31,23 +77,23 @@ return function()
     controlButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     controlButton.Font = Enum.Font.Code
     controlButton.TextSize = 14
-    controlButton.Parent = container
+    controlButton.Parent = controlsContainer
 
     local controlButtonCorner = Instance.new('UICorner')
-    controlButtonCorner.CornerRadius = UDim.new(0, 6)
+    controlButtonCorner.CornerRadius = UDim.new(0, 4)
     controlButtonCorner.Parent = controlButton
 
     local controlButtonStroke = Instance.new('UIStroke')
     controlButtonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     controlButtonStroke.Color = Color3.fromRGB(50, 50, 50)
-    controlButtonStroke.Thickness = 2
+    controlButtonStroke.Thickness = 1
     controlButtonStroke.LineJoinMode = Enum.LineJoinMode.Round
     controlButtonStroke.Parent = controlButton
 
     -- Текстовое поле для ввода скорости
     local speedTextBox = Instance.new('TextBox')
-    speedTextBox.Size = UDim2.new(0, 50, 0, 40)
-    speedTextBox.Position = UDim2.new(0, 130, 0, 0)
+    speedTextBox.Size = UDim2.new(0, 50, 1, 0)
+    speedTextBox.Position = UDim2.new(0, 125, 0, 0)
     speedTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     speedTextBox.BorderSizePixel = 0
     speedTextBox.Text = '25'
@@ -57,29 +103,18 @@ return function()
     speedTextBox.PlaceholderText = 'Speed'
     speedTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
     speedTextBox.TextXAlignment = Enum.TextXAlignment.Center
-    speedTextBox.Parent = container
+    speedTextBox.Parent = controlsContainer
 
     local speedTextBoxCorner = Instance.new('UICorner')
-    speedTextBoxCorner.CornerRadius = UDim.new(0, 6)
+    speedTextBoxCorner.CornerRadius = UDim.new(0, 4)
     speedTextBoxCorner.Parent = speedTextBox
 
     local speedTextBoxStroke = Instance.new('UIStroke')
     speedTextBoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     speedTextBoxStroke.Color = Color3.fromRGB(50, 50, 50)
-    speedTextBoxStroke.Thickness = 2
+    speedTextBoxStroke.Thickness = 1
     speedTextBoxStroke.LineJoinMode = Enum.LineJoinMode.Round
     speedTextBoxStroke.Parent = speedTextBox
-
-    -- Кнопка для перемещения (невидимая область для перетаскивания)
-    local dragHandle = Instance.new('TextButton')
-    dragHandle.Size = UDim2.new(0, 20, 0, 20)
-    dragHandle.Position = UDim2.new(0, 180, 0, 0)
-    dragHandle.BackgroundTransparency = 1
-    dragHandle.Text = "⤧"
-    dragHandle.TextColor3 = Color3.fromRGB(150, 150, 150)
-    dragHandle.Font = Enum.Font.Code
-    dragHandle.TextSize = 12
-    dragHandle.Parent = container
 
     -- Переменные состояния
     local speedEnabled = false
@@ -128,40 +163,43 @@ return function()
         local newY = startPos.Y.Offset + delta.Y
 
         -- Ограничиваем позицию в пределах экрана
-        newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - container.AbsoluteSize.X)
-        newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - container.AbsoluteSize.Y)
+        newX = math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - mainContainer.AbsoluteSize.X)
+        newY = math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - mainContainer.AbsoluteSize.Y)
 
-        container.Position = UDim2.new(0, newX, 0, newY)
+        mainContainer.Position = UDim2.new(0, newX, 0, newY)
     end
 
-    -- Обработчики событий для перетаскивания
-    local function onInputBegan(input)
+    -- Обработчики событий для перетаскивания (только за полоску)
+    dragBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragStart = input.Position
-            startPos = container.Position
+            startPos = mainContainer.Position
+            
+            -- Эффект при захвате
+            TweenService:Create(
+                dragBar,
+                TweenInfo.new(0.1),
+                {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}
+            ):Play()
+            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragStart = nil
+                    TweenService:Create(
+                        dragBar,
+                        TweenInfo.new(0.1),
+                        {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}
+                    ):Play()
                 end
             end)
         end
-    end
+    end)
 
-    local function onInputChanged(input)
+    dragBar.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then
             dragInput = input
         end
-    end
-
-    -- Подключаем события перетаскивания к элементам
-    dragHandle.InputBegan:Connect(onInputBegan)
-    dragHandle.InputChanged:Connect(onInputChanged)
-    
-    controlButton.InputBegan:Connect(onInputBegan)
-    controlButton.InputChanged:Connect(onInputChanged)
-    
-    speedTextBox.InputBegan:Connect(onInputBegan)
-    speedTextBox.InputChanged:Connect(onInputChanged)
+    end)
 
     -- Обработка перемещения мыши
     UserInputService.InputChanged:Connect(function(input)
@@ -170,21 +208,25 @@ return function()
         end
     end)
 
-    -- Эффекты при наведении на кнопку перемещения
-    dragHandle.MouseEnter:Connect(function()
-        TweenService:Create(
-            dragHandle,
-            TweenInfo.new(0.2),
-            {TextColor3 = Color3.fromRGB(255, 255, 255)}
-        ):Play()
+    -- Эффекты для полоски перемещения
+    dragBar.MouseEnter:Connect(function()
+        if not dragStart then
+            TweenService:Create(
+                dragBar,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}
+            ):Play()
+        end
     end)
 
-    dragHandle.MouseLeave:Connect(function()
-        TweenService:Create(
-            dragHandle,
-            TweenInfo.new(0.2),
-            {TextColor3 = Color3.fromRGB(150, 150, 150)}
-        ):Play()
+    dragBar.MouseLeave:Connect(function()
+        if not dragStart then
+            TweenService:Create(
+                dragBar,
+                TweenInfo.new(0.2),
+                {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}
+            ):Play()
+        end
     end)
 
     -- Эффекты для основной кнопки
@@ -208,11 +250,36 @@ return function()
     controlButton.MouseButton1Click:Connect(function()
         speedEnabled = not speedEnabled
         controlButton.Text = speedEnabled and 'SPEED: ON' or 'SPEED: OFF'
+        
+        -- Визуальная обратная связь
+        local targetColor = speedEnabled and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(25, 25, 25)
+        TweenService:Create(
+            controlButton,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = targetColor}
+        ):Play()
     end)
 
     -- Обновление скорости из текстового поля
     speedTextBox.FocusLost:Connect(function(enterPressed)
         updateSpeedFromTextBox()
+    end)
+
+    -- Эффекты для текстового поля
+    speedTextBox.Focused:Connect(function()
+        TweenService:Create(
+            speedTextBox,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}
+        ):Play()
+    end)
+
+    speedTextBox.FocusLost:Connect(function()
+        TweenService:Create(
+            speedTextBox,
+            TweenInfo.new(0.2),
+            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+        ):Play()
     end)
 
     -- Применение скорости каждый кадр
