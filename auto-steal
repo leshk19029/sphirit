@@ -86,10 +86,18 @@ local function updateSpeedFromTextBox()
     local text = speedTextBox.Text
     if text and text ~= "" then
         local newSpeed = tonumber(text)
-        if newSpeed and newSpeed >= 1 and newSpeed <= 45 then
-            currentSpeed = newSpeed
+        if newSpeed then
+            if newSpeed > 45 then
+                currentSpeed = 45
+                speedTextBox.Text = "45"
+            elseif newSpeed < 1 then
+                currentSpeed = 1
+                speedTextBox.Text = "1"
+            else
+                currentSpeed = newSpeed
+            end
         else
-            -- Если введено недопустимое значение, возвращаем предыдущее
+            -- Если введено не число, возвращаем предыдущее значение
             speedTextBox.Text = tostring(currentSpeed)
         end
     end
