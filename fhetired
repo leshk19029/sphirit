@@ -1,6 +1,7 @@
 local Players = game:GetService('Players')
 local UserInputService = game:GetService('UserInputService')
 local RunService = game:GetService('RunService')
+local TweenService = game:GetService('TweenService')
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -22,6 +23,7 @@ local cachedFunctions = {
     AntiEffects = nil,
     ESP = nil,
     ControlPlayer = nil,
+    SpeedBoost = nil,
 }
 
 -- Состояния функций
@@ -29,6 +31,7 @@ local functionStates = {
     AntiEffects = false,
     ESP = false,
     ControlPlayer = false,
+    SpeedBoost = false,
 }
 
 -- Создаем GUI
@@ -64,7 +67,7 @@ toggleButtonStroke.Parent = toggleButton
 
 -- Главное меню
 local mainFrame = Instance.new('Frame')
-mainFrame.Size = UDim2.new(0, 250, 0, 200)
+mainFrame.Size = UDim2.new(0, 250, 0, 250)
 mainFrame.Position = UDim2.new(0, 80, 0, 10)
 mainFrame.BackgroundColor3 = mainColor
 mainFrame.BorderSizePixel = 0
@@ -244,6 +247,45 @@ local function safeLoad(url, name)
         warn('Failed to load', name, ':', result)
         return nil
     end
+end
+
+-- Speed-Boost functionality
+local speedBoostCleanup = nil
+
+local function loadSpeedBoost()
+    return safeLoad(
+        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/speed-boost',
+        'SpeedBoost'
+    )
+end
+
+local function startSpeedBoost()
+    if functionStates.SpeedBoost then
+        return true
+    end
+
+    local func = loadSpeedBoost()
+    if func and type(func) == 'function' then
+        local success, result = pcall(func)
+        if success then
+            speedBoostCleanup = result
+            functionStates.SpeedBoost = true
+            return true
+        else
+            warn('SpeedBoost execution failed:', result)
+            return false
+        end
+    else
+        return false
+    end
+end
+
+local function stopSpeedBoost()
+    if speedBoostCleanup and type(speedBoostCleanup) == 'function' then
+        pcall(speedBoostCleanup)
+        speedBoostCleanup = nil
+    end
+    functionStates.SpeedBoost = false
 end
 
 -- Anti-Effects functionality
@@ -557,6 +599,59 @@ controlPlayerToggle.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Speed-Boost toggle button
+local speedBoostToggle = Instance.new('TextButton')
+speedBoostToggle.Size = UDim2.new(1, 0, 0, 40)
+speedBoostToggle.Position = UDim2.new(0, 0, 0, 150)
+speedBoostToggle.BackgroundColor3 = mainColor
+speedBoostToggle.BorderSizePixel = 0
+speedBoostToggle.Text = 'SPEED-BOOST'
+speedBoostToggle.TextColor3 = textColor
+speedBoostToggle.Font = Enum.Font.SciFi
+speedBoostToggle.TextSize = 20
+speedBoostToggle.Parent = contentFrame
+
+local speedBoostToggleCorner = Instance.new('UICorner')
+speedBoostToggleCorner.CornerRadius = UDim.new(0, 6)
+speedBoostToggleCorner.Parent = speedBoostToggle
+
+local speedBoostToggleStroke = Instance.new('UIStroke')
+speedBoostToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+speedBoostToggleStroke.Color = borderColor
+speedBoostToggleStroke.Thickness = 1.5
+speedBoostToggleStroke.LineJoinMode = Enum.LineJoinMode.Round
+speedBoostToggleStroke.Parent = speedBoostToggle
+
+speedBoostToggle.MouseButton1Click:Connect(function()
+    if functionStates.SpeedBoost then
+        if stopSpeedBoost() then
+            speedBoostToggle.TextColor3 = textColor
+            speedBoostToggleStroke.Color = borderColor
+        else
+            speedBoostToggle.TextColor3 = Color3.fromRGB(255, 50, 50)
+            speedBoostToggleStroke.Color = Color3.fromRGB(255, 50, 50)
+        end
+    else
+        speedBoostToggle.TextColor3 = Color3.fromRGB(255, 255, 100)
+        speedBoostToggleStroke.Color = Color3.fromRGB(255, 255, 100)
+
+        if startSpeedBoost() then
+            speedBoostToggle.TextColor3 = accentColor
+            speedBoostToggleStroke.Color = accentColor
+        else
+            speedBoostToggle.TextColor3 = Color3.fromRGB(255, 50, 50)
+            speedBoostToggleStroke.Color = Color3.fromRGB(255, 50, 50)
+
+            task.delay(2, function()
+                if not functionStates.SpeedBoost then
+                    speedBoostToggle.TextColor3 = textColor
+                    speedBoostToggleStroke.Color = borderColor
+                end
+            end)
+        end
+    end
+end)
+
 -- Управление видимостью главного меню
 mainFrame.Visible = false
 
@@ -572,6 +667,10 @@ local function restoreFunctions()
 
     if functionStates.ControlPlayer then
         startControlPlayer()
+    end
+
+    if functionStates.SpeedBoost then
+        startSpeedBoost()
     end
 end
 
@@ -610,6 +709,14 @@ task.spawn(function()
         controlPlayerToggle.TextColor3 = textColor
         controlPlayerToggleStroke.Color = borderColor
     end
+
+    if functionStates.SpeedBoost then
+        speedBoostToggle.TextColor3 = accentColor
+        speedBoostToggleStroke.Color = accentColor
+    else
+        speedBoostToggle.TextColor3 = textColor
+        speedBoostToggleStroke.Color = borderColor
+    end
 end)
 
 -- Очистка при удалении GUI
@@ -617,6 +724,7 @@ screenGui.Destroying:Connect(function()
     stopAntiEffects()
     stopESP()
     stopControlPlayer()
+    stopSpeedBoost()
 end)
 
 -- Предзагрузка функций в фоновом режиме
@@ -624,6 +732,7 @@ task.spawn(function()
     loadAntiEffects()
     loadESP()
     loadControlPlayer()
+    loadSpeedBoost()
 end)
 
 -- Автоматическое обновление цветов кнопок
@@ -654,6 +763,14 @@ task.spawn(function()
         elseif not functionStates.ControlPlayer and controlPlayerToggle.TextColor3 == accentColor then
             controlPlayerToggle.TextColor3 = textColor
             controlPlayerToggleStroke.Color = borderColor
+        end
+
+        if functionStates.SpeedBoost and speedBoostToggle.TextColor3 ~= accentColor then
+            speedBoostToggle.TextColor3 = accentColor
+            speedBoostToggleStroke.Color = accentColor
+        elseif not functionStates.SpeedBoost and speedBoostToggle.TextColor3 == accentColor then
+            speedBoostToggle.TextColor3 = textColor
+            speedBoostToggleStroke.Color = borderColor
         end
     end
 end)
