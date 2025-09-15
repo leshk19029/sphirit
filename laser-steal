@@ -4,7 +4,7 @@ local Event = game:GetService('ReplicatedStorage').Packages.Net['RE/UseItem']
 
 local player = Players.LocalPlayer
 local isFiring = false
-local fireRate = 30 -- Default rate, can be overridden
+local fireRate = 30 -- Значение по умолчанию
 local fireInterval = 1 / fireRate
 local lastFireTime = 0
 local equipConnection = nil
@@ -16,7 +16,7 @@ local function getCharacter(p)
     if p and p.Character then
         return p.Character
     end
-    warn('No character found for player:', p.Name)
+    warn('Нет персонажа для игрока:', p.Name)
     return nil
 end
 
@@ -37,13 +37,13 @@ local function getRandomPlayer()
     if #validPlayers > 0 then
         return validPlayers[math.random(1, #validPlayers)]
     end
-    -- Fallback to local player's UpperTorso if no other players
+    -- Запасной вариант: использовать локального игрока
     local localCharacter = getCharacter(player)
     if localCharacter and localCharacter:FindFirstChild('UpperTorso') then
-        warn('No other players found, using local player as target')
+        warn('Другие игроки не найдены, используется локальный игрок')
         return localCharacter
     end
-    warn('No valid players or local UpperTorso found for spamEvent')
+    warn('Нет доступных игроков или UpperTorso для spamEvent')
     return nil
 end
 
@@ -51,9 +51,10 @@ end
 local function spamEvent()
     local targetCharacter = getRandomPlayer()
     if targetCharacter and targetCharacter:FindFirstChild('UpperTorso') then
+        local targetPosition = targetCharacter.UpperTorso.Position
         local success, errorMsg = pcall(function()
             Event:FireServer(
-                Vector3.new(-344.38818359375, 2.8618948459625, 35.521560668945),
+                targetPosition, -- Динамическая позиция цели
                 targetCharacter.UpperTorso
             )
         end)
@@ -62,7 +63,7 @@ local function spamEvent()
             warn('Ошибка при вызове FireServer: ' .. errorMsg)
         end
     else
-        warn('No target character or UpperTorso for spamEvent')
+        warn('Нет цели или UpperTorso для spamEvent')
     end
 end
 
@@ -70,7 +71,7 @@ end
 local function takeLaserCape()
     local backpack = player:FindFirstChild('Backpack')
     if not backpack then
-        warn('No Backpack found')
+        warn('Backpack не найден')
         return false
     end
 
@@ -81,17 +82,17 @@ local function takeLaserCape()
                 local humanoid = character:FindFirstChild('Humanoid')
                 if humanoid then
                     humanoid:EquipTool(tool)
-                    print('Equipped Laser Cape:', tool.Name)
+                    print('Экипирован Laser Cape:', tool.Name)
                     return true
                 else
-                    warn('No Humanoid found in character')
+                    warn('Humanoid не найден в персонаже')
                 end
             else
-                warn('No character found for equipping')
+                warn('Персонаж не найден для экипировки')
             end
         end
     end
-    warn('No Laser Cape found in Backpack')
+    warn('Laser Cape не найден в Backpack')
     return false
 end
 
@@ -116,7 +117,7 @@ local function startAutoEquip()
                 takeLaserCape()
             end
         else
-            warn('No character for auto-equip')
+            warn('Персонаж отсутствует для авто-экипировки')
         end
     end)
 
@@ -136,7 +137,7 @@ local function startItemSpam(rate)
     end
     isFiring = true
 
-    -- Heartbeat loop
+    -- Heartbeat цикл
     if spamConnection then
         spamConnection:Disconnect()
     end
@@ -154,7 +155,7 @@ local function startItemSpam(rate)
         end
     end)
 
-    -- Spawn loop for redundancy
+    -- Spawn цикл для надежности
     if not spawnLoopRunning then
         spawnLoopRunning = true
         spawn(function()
