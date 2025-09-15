@@ -4,7 +4,7 @@ local Event = game:GetService('ReplicatedStorage').Packages.Net['RE/UseItem']
 
 local player = Players.LocalPlayer
 local isFiring = false
-local fireRate = 30 -- Значение по умолчанию
+local fireRate = 50 -- Значение по умолчанию
 local fireInterval = 1 / fireRate
 local lastFireTime = 0
 local equipConnection = nil
