@@ -16,51 +16,63 @@ local function getCharacter(p)
     if p and p.Character then
         return p.Character
     end
-    warn('Нет персонажа для игрока:', p.Name)
+    warn('Нет персонажа для игрока: ' .. p.Name)
     return nil
 end
 
--- Функция для получения случайного игрока
-local function getRandomPlayer()
-    local players = Players:GetPlayers()
-    local validPlayers = {}
+-- Функция для поиска ближайшего игрока
+local function getClosestPlayer()
+    local localCharacter = getCharacter(player)
+    if not localCharacter or not localCharacter:FindFirstChild('HumanoidRootPart') then
+        warn('Локальный игрок не имеет персонажа или HumanoidRootPart')
+        return nil
+    end
 
-    for _, p in ipairs(players) do
-        if p ~= Players.LocalPlayer then
+    local localRoot = localCharacter.HumanoidRootPart
+    local closestPlayer = nil
+    local closestDistance = math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
             local character = getCharacter(p)
-            if character and character:FindFirstChild('UpperTorso') then
-                table.insert(validPlayers, character)
+            if character and character:FindFirstChild('HumanoidRootPart') and character:FindFirstChild('UpperTorso') then
+                local distance = (localRoot.Position - character.HumanoidRootPart.Position).Magnitude
+                warn('Игрок: ' .. p.Name .. ', расстояние: ' .. tostring(distance))
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestPlayer = character
+                end
+            else
+                warn('Игрок ' .. p.Name .. ' не имеет персонажа, HumanoidRootPart или UpperTorso')
             end
         end
     end
 
-    if #validPlayers > 0 then
-        return validPlayers[math.random(1, #validPlayers)]
+    if closestPlayer then
+        warn('Найден ближайший игрок: ' .. closestPlayer.Parent.Name .. ', расстояние: ' .. tostring(closestDistance))
+        return closestPlayer
+    else
+        warn('Ближайший игрок не найден')
+        return nil
     end
-    -- Запасной вариант: использовать локального игрока
-    local localCharacter = getCharacter(player)
-    if localCharacter and localCharacter:FindFirstChild('UpperTorso') then
-        warn('Другие игроки не найдены, используется локальный игрок')
-        return localCharacter
-    end
-    warn('Нет доступных игроков или UpperTorso для spamEvent')
-    return nil
 end
 
 -- Функция для спама ивентами
 local function spamEvent()
-    local targetCharacter = getRandomPlayer()
+    local targetCharacter = getClosestPlayer()
     if targetCharacter and targetCharacter:FindFirstChild('UpperTorso') then
         local targetPosition = targetCharacter.UpperTorso.Position
         local success, errorMsg = pcall(function()
             Event:FireServer(
-                targetPosition, -- Динамическая позиция цели
+                targetPosition, -- Позиция UpperTorso цели
                 targetCharacter.UpperTorso
             )
         end)
 
-        if not success then
-            warn('Ошибка при вызове FireServer: ' .. errorMsg)
+        if success then
+            warn('Успешно отправлен FireServer для игрока: ' .. targetCharacter.Parent.Name)
+        else
+            warn('Ошибка при вызове FireServer: ' .. tostring(errorMsg))
         end
     else
         warn('Нет цели или UpperTorso для spamEvent')
@@ -82,7 +94,7 @@ local function takeLaserCape()
                 local humanoid = character:FindFirstChild('Humanoid')
                 if humanoid then
                     humanoid:EquipTool(tool)
-                    print('Экипирован Laser Cape:', tool.Name)
+                    warn('Экипирован Laser Cape: ' .. tool.Name)
                     return true
                 else
                     warn('Humanoid не найден в персонаже')
@@ -134,6 +146,7 @@ local function startItemSpam(rate)
     if rate then
         fireRate = math.clamp(rate, 10, 60)
         fireInterval = 1 / fireRate
+        warn('Установлена частота спама: ' .. tostring(fireRate) .. ' Гц')
     end
     isFiring = true
 
@@ -174,6 +187,7 @@ local function startItemSpam(rate)
             spamConnection = nil
         end
         spawnLoopRunning = false
+        warn('Спам остановлен')
     end
 end
 
