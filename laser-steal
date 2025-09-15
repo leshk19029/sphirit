@@ -4,16 +4,19 @@ local Event = game:GetService('ReplicatedStorage').Packages.Net['RE/UseItem']
 
 local player = Players.LocalPlayer
 local isFiring = false
-local fireRate = 30 -- раз в секунду
+local fireRate = 30 -- Default rate, can be overridden
 local fireInterval = 1 / fireRate
 local lastFireTime = 0
 local equipConnection = nil
+local spamConnection = nil
+local spawnLoopRunning = false
 
 -- Функция для безопасного получения персонажа
-local function getCharacter(player)
-    if player and player.Character then
-        return player.Character
+local function getCharacter(p)
+    if p and p.Character then
+        return p.Character
     end
+    warn('No character found for player:', p.Name)
     return nil
 end
 
@@ -34,6 +37,13 @@ local function getRandomPlayer()
     if #validPlayers > 0 then
         return validPlayers[math.random(1, #validPlayers)]
     end
+    -- Fallback to local player's UpperTorso if no other players
+    local localCharacter = getCharacter(player)
+    if localCharacter and localCharacter:FindFirstChild('UpperTorso') then
+        warn('No other players found, using local player as target')
+        return localCharacter
+    end
+    warn('No valid players or local UpperTorso found for spamEvent')
     return nil
 end
 
@@ -51,6 +61,8 @@ local function spamEvent()
         if not success then
             warn('Ошибка при вызове FireServer: ' .. errorMsg)
         end
+    else
+        warn('No target character or UpperTorso for spamEvent')
     end
 end
 
@@ -58,6 +70,7 @@ end
 local function takeLaserCape()
     local backpack = player:FindFirstChild('Backpack')
     if not backpack then
+        warn('No Backpack found')
         return false
     end
 
@@ -68,11 +81,17 @@ local function takeLaserCape()
                 local humanoid = character:FindFirstChild('Humanoid')
                 if humanoid then
                     humanoid:EquipTool(tool)
+                    print('Equipped Laser Cape:', tool.Name)
                     return true
+                else
+                    warn('No Humanoid found in character')
                 end
+            else
+                warn('No character found for equipping')
             end
         end
     end
+    warn('No Laser Cape found in Backpack')
     return false
 end
 
@@ -96,6 +115,8 @@ local function startAutoEquip()
             if not hasLaserCape then
                 takeLaserCape()
             end
+        else
+            warn('No character for auto-equip')
         end
     end)
 
@@ -108,11 +129,21 @@ local function startAutoEquip()
 end
 
 -- Основной цикл для спама
-local function startItemSpam()
-    local spamConnection
+local function startItemSpam(rate)
+    if rate then
+        fireRate = math.clamp(rate, 10, 60)
+        fireInterval = 1 / fireRate
+    end
+    isFiring = true
+
+    -- Heartbeat loop
+    if spamConnection then
+        spamConnection:Disconnect()
+    end
     spamConnection = RunService.Heartbeat:Connect(function()
         if not isFiring then
             spamConnection:Disconnect()
+            spamConnection = nil
             return
         end
 
@@ -123,11 +154,25 @@ local function startItemSpam()
         end
     end)
 
+    -- Spawn loop for redundancy
+    if not spawnLoopRunning then
+        spawnLoopRunning = true
+        spawn(function()
+            while spawnLoopRunning and isFiring do
+                spamEvent()
+                wait(fireInterval)
+            end
+            spawnLoopRunning = false
+        end)
+    end
+
     return function()
+        isFiring = false
         if spamConnection then
             spamConnection:Disconnect()
+            spamConnection = nil
         end
-        isFiring = false
+        spawnLoopRunning = false
     end
 end
 
