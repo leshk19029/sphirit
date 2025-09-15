@@ -4,27 +4,23 @@ local Event = game:GetService('ReplicatedStorage').Packages.Net['RE/UseItem']
 
 local player = Players.LocalPlayer
 local isFiring = false
-local fireRate = 50 -- Значение по умолчанию
+local fireRate = 50
 local fireInterval = 1 / fireRate
 local lastFireTime = 0
 local equipConnection = nil
 local spamConnection = nil
 local spawnLoopRunning = false
 
--- Функция для безопасного получения персонажа
 local function getCharacter(p)
     if p and p.Character then
         return p.Character
     end
-    warn('Нет персонажа для игрока: ' .. p.Name)
     return nil
 end
 
--- Функция для поиска ближайшего игрока
 local function getClosestPlayer()
     local localCharacter = getCharacter(player)
     if not localCharacter or not localCharacter:FindFirstChild('HumanoidRootPart') then
-        warn('Локальный игрок не имеет персонажа или HumanoidRootPart')
         return nil
     end
 
@@ -37,53 +33,33 @@ local function getClosestPlayer()
             local character = getCharacter(p)
             if character and character:FindFirstChild('HumanoidRootPart') and character:FindFirstChild('UpperTorso') then
                 local distance = (localRoot.Position - character.HumanoidRootPart.Position).Magnitude
-                warn('Игрок: ' .. p.Name .. ', расстояние: ' .. tostring(distance))
                 if distance < closestDistance then
                     closestDistance = distance
                     closestPlayer = character
                 end
-            else
-                warn('Игрок ' .. p.Name .. ' не имеет персонажа, HumanoidRootPart или UpperTorso')
             end
         end
     end
 
-    if closestPlayer then
-        warn('Найден ближайший игрок: ' .. closestPlayer.Parent.Name .. ', расстояние: ' .. tostring(closestDistance))
-        return closestPlayer
-    else
-        warn('Ближайший игрок не найден')
-        return nil
-    end
+    return closestPlayer
 end
 
--- Функция для спама ивентами
 local function spamEvent()
     local targetCharacter = getClosestPlayer()
     if targetCharacter and targetCharacter:FindFirstChild('UpperTorso') then
         local targetPosition = targetCharacter.UpperTorso.Position
-        local success, errorMsg = pcall(function()
+        local success = pcall(function()
             Event:FireServer(
-                targetPosition, -- Позиция UpperTorso цели
+                targetPosition,
                 targetCharacter.UpperTorso
             )
         end)
-
-        if success then
-            warn('Успешно отправлен FireServer для игрока: ' .. targetCharacter.Parent.Name)
-        else
-            warn('Ошибка при вызове FireServer: ' .. tostring(errorMsg))
-        end
-    else
-        warn('Нет цели или UpperTorso для spamEvent')
     end
 end
 
--- Функция для взятия Laser Cape
 local function takeLaserCape()
     local backpack = player:FindFirstChild('Backpack')
     if not backpack then
-        warn('Backpack не найден')
         return false
     end
 
@@ -94,21 +70,14 @@ local function takeLaserCape()
                 local humanoid = character:FindFirstChild('Humanoid')
                 if humanoid then
                     humanoid:EquipTool(tool)
-                    warn('Экипирован Laser Cape: ' .. tool.Name)
                     return true
-                else
-                    warn('Humanoid не найден в персонаже')
                 end
-            else
-                warn('Персонаж не найден для экипировки')
             end
         end
     end
-    warn('Laser Cape не найден в Backpack')
     return false
 end
 
--- Запуск авто-экипировки
 local function startAutoEquip()
     if equipConnection then
         equipConnection:Disconnect()
@@ -128,8 +97,6 @@ local function startAutoEquip()
             if not hasLaserCape then
                 takeLaserCape()
             end
-        else
-            warn('Персонаж отсутствует для авто-экипировки')
         end
     end)
 
@@ -141,16 +108,13 @@ local function startAutoEquip()
     end
 end
 
--- Основной цикл для спама
 local function startItemSpam(rate)
     if rate then
         fireRate = math.clamp(rate, 10, 60)
         fireInterval = 1 / fireRate
-        warn('Установлена частота спама: ' .. tostring(fireRate) .. ' Гц')
     end
     isFiring = true
 
-    -- Heartbeat цикл
     if spamConnection then
         spamConnection:Disconnect()
     end
@@ -168,7 +132,6 @@ local function startItemSpam(rate)
         end
     end)
 
-    -- Spawn цикл для надежности
     if not spawnLoopRunning then
         spawnLoopRunning = true
         spawn(function()
@@ -187,11 +150,9 @@ local function startItemSpam(rate)
             spamConnection = nil
         end
         spawnLoopRunning = false
-        warn('Спам остановлен')
     end
 end
 
--- Экспортируем функции
 return {
     startItemSpam = startItemSpam,
     startAutoEquip = startAutoEquip,
