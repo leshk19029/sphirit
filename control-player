@@ -12,34 +12,44 @@ return function()
     local countdownCoroutine = nil
     local currentTools = {} -- Для хранения текущих инструментов
     local originalHumanoidState = nil -- Для хранения состояния Humanoid
+    local webSlingerTool = nil -- Для хранения Web Slinger
 
     -- Функция для остановки движения персонажа
     local function stopCharacterMovement(character)
-        if not character then return end
-        
+        if not character then
+            return
+        end
+
         local humanoid = character:FindFirstChild('Humanoid')
-        if not humanoid then return end
-        
+        local humanoidRootPart = character:FindFirstChild('HumanoidRootPart')
+        if not humanoid or not humanoidRootPart then
+            return
+        end
+
         -- Останавливаем движение
-        humanoid:MoveTo(character:FindFirstChild('HumanoidRootPart').Position)
-        
+        humanoid:MoveTo(humanoidRootPart.Position)
+
         -- Сохраняем текущее состояние и останавливаем анимации
         originalHumanoidState = {
             MoveDirection = humanoid.MoveDirection,
-            WalkSpeed = humanoid.WalkSpeed
+            WalkSpeed = humanoid.WalkSpeed,
         }
-        
+
         -- Устанавливаем нулевую скорость
         humanoid.WalkSpeed = 0
     end
 
     -- Функция для восстановления движения персонажа
     local function restoreCharacterMovement(character)
-        if not character or not originalHumanoidState then return end
-        
+        if not character or not originalHumanoidState then
+            return
+        end
+
         local humanoid = character:FindFirstChild('Humanoid')
-        if not humanoid then return end
-        
+        if not humanoid then
+            return
+        end
+
         -- Восстанавливаем скорость
         humanoid.WalkSpeed = originalHumanoidState.WalkSpeed
         originalHumanoidState = nil
@@ -60,84 +70,104 @@ return function()
         return modifiedCount
     end
 
-    -- Функция для убирания всех инструментов из рук
-    local function unequipAllTools()
+    -- Функция для сохранения текущих инструментов
+    local function saveCurrentTools()
         local localPlayer = Players.LocalPlayer
         local character = localPlayer.Character
-        if not character then return end
-        
-        local backpack = localPlayer:FindFirstChild('Backpack')
-        if not backpack then return end
-        
-        -- Сохраняем текущие инструменты и убираем их
+        if not character then
+            return
+        end
+
+        -- Сохраняем текущие инструменты
         currentTools = {}
         for _, tool in ipairs(character:GetChildren()) do
             if tool:IsA('Tool') then
                 table.insert(currentTools, tool)
-                tool.Parent = backpack
             end
         end
     end
 
-    -- Функция для возврата инструментов в руки
-    local function reequipTools()
-        local localPlayer = Players.LocalPlayer
-        local character = localPlayer.Character
-        if not character then return end
-        
-        for _, tool in ipairs(currentTools) do
-            if tool and tool.Parent then
-                tool.Parent = character
-            end
-        end
-        currentTools = {}
-    end
-
-    -- Функция для проверки и взятия Web Slinger в руки
-    local function ensureWebSlingerInHands()
+    -- Функция для восстановления инструментов
+    local function restoreTools()
         local localPlayer = Players.LocalPlayer
         local character = localPlayer.Character
         if not character then
-            return false
+            return
         end
 
+        -- Убираем Web Slinger из руки и возвращаем в бэкпак
+        if webSlingerTool and webSlingerTool.Parent == character then
+            webSlingerTool.Parent = localPlayer.Backpack
+        end
+        webSlingerTool = nil
+
+        -- Возвращаем сохраненные инструменты в руки
+        for _, tool in ipairs(currentTools) do
+            if tool and tool.Parent == localPlayer.Backpack then
+                tool.Parent = character
+            end
+        end
+
+        currentTools = {}
+    end
+
+    -- Функция для взятия Web Slinger в руки
+    local function takeWebSlinger()
+        local localPlayer = Players.LocalPlayer
+        local character = localPlayer.Character
         local backpack = localPlayer:FindFirstChild('Backpack')
-        if not backpack then
+        if not backpack or not character then
             return false
         end
 
-        -- Убираем все текущие инструменты из рук
-        unequipAllTools()
+        -- Сохраняем текущие инструменты
+        saveCurrentTools()
 
-        -- Ищем Web Slinger в инвентаре (гибкий поиск)
-        local webSlinger = nil
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA('Tool') and (item.Name:lower():find('web') or item.Name:lower():find('slinger') or item.Name:lower():find('shooter')) then
-                webSlinger = item
+        -- Убираем текущие инструменты в бэкпак
+        for _, tool in ipairs(currentTools) do
+            if tool.Parent == character then
+                tool.Parent = backpack
+            end
+        end
+
+        -- Ищем Web Slinger в бэкпаке
+        webSlingerTool = nil
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if
+                tool:IsA('Tool')
+                and (
+                    tool.Name:lower():find('web')
+                    or tool.Name:lower():find('slinger')
+                    or tool.Name:lower():find('shooter')
+                    or tool.Name:lower():find('swing')
+                )
+            then
+                webSlingerTool = tool
                 break
             end
         end
 
-        -- Если не нашли, пробуем другие варианты названий
-        if not webSlinger then
-            for _, item in ipairs(backpack:GetChildren()) do
-                if item:IsA('Tool') and item.Name:lower():find('swing') then
-                    webSlinger = item
-                    break
+        if not webSlingerTool then
+            -- Возвращаем инструменты обратно
+            for _, tool in ipairs(currentTools) do
+                if tool.Parent == backpack then
+                    tool.Parent = character
                 end
             end
+            currentTools = {}
+            return false
         end
 
-        -- Если нашли Web Slinger, берем его в руки
-        if webSlinger then
-            webSlinger.Parent = character
-            wait(0.2) -- Даем время для перемещения
+        -- Берем Web Slinger в руки
+        webSlingerTool.Parent = character
+
+        -- Экипируем Web Slinger
+        local humanoid = character:FindFirstChild('Humanoid')
+        if humanoid then
+            humanoid:EquipTool(webSlingerTool)
             return true
         end
 
-        -- Если не нашли Web Slinger, возвращаем инструменты обратно
-        reequipTools()
-        warn("Web Slinger не найден в инвентаре!")
         return false
     end
 
@@ -179,19 +209,19 @@ return function()
     -- Функция для поиска игрока, в которого мы выстрелили
     local function findShotPlayer()
         local localPlayer = Players.LocalPlayer
-        
+
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= localPlayer and player.Character then
                 local character = player.Character
                 local humanoid = character:FindFirstChild('Humanoid')
-                
+
                 -- Если у игрока PlatformStand включен, значит мы в него выстрелили
                 if humanoid and humanoid.PlatformStand then
                     return player
                 end
             end
         end
-        
+
         return nil
     end
 
@@ -260,8 +290,8 @@ return function()
             workspace.CurrentCamera.CameraSubject = originalCharacter.Humanoid
         end
 
-        -- Возвращаем инструменты в руки
-        reequipTools()
+        -- Восстанавливаем инструменты (убираем Web Slinger из руки)
+        restoreTools()
 
         -- Очищаем переменные
         originalCharacter = nil
@@ -296,7 +326,7 @@ return function()
     controlButton.Position = UDim2.new(0, 10, 0, 10)
     controlButton.BackgroundColor3 = mainColor
     controlButton.BorderSizePixel = 0
-    controlButton.Text = 'Control Player'
+    controlButton.Text = 'CONTROL PLAYER (F)'
     controlButton.TextColor3 = textColor
     controlButton.Font = Enum.Font.Code
     controlButton.TextSize = 14
@@ -318,7 +348,7 @@ return function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
-            {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}
+            { BackgroundColor3 = Color3.fromRGB(35, 35, 35) }
         ):Play()
     end)
 
@@ -326,7 +356,7 @@ return function()
         TweenService:Create(
             controlButton,
             TweenInfo.new(0.2),
-            {BackgroundColor3 = mainColor}
+            { BackgroundColor3 = mainColor }
         ):Play()
     end)
 
@@ -343,8 +373,16 @@ return function()
         local newX = startPos.X.Offset + delta.X
         local newY = startPos.Y.Offset + delta.Y
 
-        newX = math.clamp(newX, 0, screenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X)
-        newY = math.clamp(newY, 0, screenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y)
+        newX = math.clamp(
+            newX,
+            0,
+            screenGui.AbsoluteSize.X - controlButton.AbsoluteSize.X
+        )
+        newY = math.clamp(
+            newY,
+            0,
+            screenGui.AbsoluteSize.Y - controlButton.AbsoluteSize.Y
+        )
 
         controlButton.Position = UDim2.new(0, newX, 0, newY)
     end
@@ -369,29 +407,28 @@ return function()
         end
     end)
 
-    -- Обработчик нажатия кнопки
-    controlButton.MouseButton1Click:Connect(function()
+    -- Основная функция контроля игрока
+    local function controlPlayer()
         if isControlling then
             -- Если уже контролируем, отменяем и возвращаемся
             stopCountdown()
             returnToOriginalCharacter()
-            controlButton.Text = 'Control Player'
+            controlButton.Text = 'CONTROL PLAYER (F)'
             controlButton.TextColor3 = textColor
             controlButtonStroke.Color = borderColor
         else
             -- Показываем, что идет поиск Web Slinger
             controlButton.Text = 'Taking Web...'
-            
-            -- Проверяем и берем Web Slinger в руки (убирая другие инструменты)
-            if not ensureWebSlingerInHands() then
-                controlButton.Text = 'Control Player'
-                warn("Web Slinger не найден!")
+
+            -- Берем Web Slinger в руки
+            if not takeWebSlinger() then
+                controlButton.Text = 'CONTROL PLAYER (F)'
                 return
             end
 
             -- Показываем, что идет поиск игрока
             controlButton.Text = 'Finding target...'
-            
+
             local nearestPlayer = findNearestPlayerInRange()
 
             if nearestPlayer and nearestPlayer.Character then
@@ -400,20 +437,24 @@ return function()
                 if targetRoot then
                     -- Показываем, что идет выстрел
                     controlButton.Text = 'Shooting...'
-                    
+
                     local Event = ReplicatedStorage.Packages.Net['RE/UseItem']
                     Event:FireServer(
-                        Vector3.new(-450.30258178711, -7.0001068115234, 1.8120102882385),
+                        Vector3.new(
+                            -450.30258178711,
+                            -7.0001068115234,
+                            1.8120102882385
+                        ),
                         targetRoot
                     )
 
                     -- Ждем и проверяем, попали ли мы
                     controlButton.Text = 'Checking hit...'
-                    
+
                     -- Ждем 1 секунду и проверяем попадание
                     wait(1)
                     local shotPlayer = findShotPlayer()
-                    
+
                     if shotPlayer then
                         -- Попали! Меняем персонажа
                         swapCharacter(shotPlayer)
@@ -436,7 +477,7 @@ return function()
                             if isControlling then
                                 -- Автоматический возврат по истечении времени
                                 returnToOriginalCharacter()
-                                controlButton.Text = 'Control Player'
+                                controlButton.Text = 'CONTROL PLAYER (F)'
                                 controlButton.TextColor3 = textColor
                                 controlButtonStroke.Color = borderColor
                             end
@@ -444,21 +485,34 @@ return function()
 
                         coroutine.resume(countdownCoroutine)
                     else
-                        warn("Промах! Не попали в игрока")
-                        -- Возвращаем инструменты обратно
-                        reequipTools()
-                        controlButton.Text = 'Control Player'
+                        -- Восстанавливаем инструменты при промахе (убираем Web Slinger)
+                        restoreTools()
+                        controlButton.Text = 'CONTROL PLAYER (F)'
                     end
                 else
-                    warn("У игрока нет HumanoidRootPart")
-                    reequipTools()
-                    controlButton.Text = 'Control Player'
+                    -- Восстанавливаем инструменты при ошибке (убираем Web Slinger)
+                    restoreTools()
+                    controlButton.Text = 'CONTROL PLAYER (F)'
                 end
             else
-                warn("Ближайший игрок не найден или вне радиуса")
-                reequipTools()
-                controlButton.Text = 'Control Player'
+                -- Восстанавливаем инструменты при ошибке (убираем Web Slinger)
+                restoreTools()
+                controlButton.Text = 'CONTROL PLAYER (F)'
             end
+        end
+    end
+
+    -- Обработчик нажатия кнопки
+    controlButton.MouseButton1Click:Connect(controlPlayer)
+
+    -- Обработчик клавиши F
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then
+            return
+        end
+
+        if input.KeyCode == Enum.KeyCode.F then
+            controlPlayer()
         end
     end)
 
@@ -467,7 +521,7 @@ return function()
         if isControlling then
             returnToOriginalCharacter()
         else
-            reequipTools()
+            restoreTools()
         end
     end)
 
@@ -475,7 +529,7 @@ return function()
         if isControlling then
             returnToOriginalCharacter()
         else
-            reequipTools()
+            restoreTools()
         end
     end)
 end
