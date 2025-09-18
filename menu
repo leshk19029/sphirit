@@ -1,4 +1,4 @@
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/your-username/your-repo/main/library.lua"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt"))()
 
 -- Создаем главное окно
 local window = library:Window("Player Controller", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
