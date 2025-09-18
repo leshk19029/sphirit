@@ -20,11 +20,13 @@ end
 local SpeedBoostModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/1")
 local AntiEffectsModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/2")
 local ESPModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/esp")
+local ControlPlayerModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/3")
 
 -- Переменные для управления функциями
 local speedEnabled = false
 local antiEffectsEnabled = false
 local espEnabled = false
+local controlPlayerEnabled = false
 
 -- Speed Boost
 if SpeedBoostModule then
@@ -68,6 +70,18 @@ else
     warn("ESP module not loaded")
 end
 
+-- Control Player
+if ControlPlayerModule then
+    mainTab:Toggle("Control Player (F)", false, function(state)
+        controlPlayerEnabled = state
+        if ControlPlayerModule.toggleControlPlayer then
+            ControlPlayerModule.toggleControlPlayer(state)
+        end
+    end)
+else
+    warn("Control Player module not loaded")
+end
+
 -- Уведомление о успешной загрузке
 task.spawn(function()
     wait(1)
@@ -75,10 +89,11 @@ task.spawn(function()
     if SpeedBoostModule then loadedModules = loadedModules + 1 end
     if AntiEffectsModule then loadedModules = loadedModules + 1 end
     if ESPModule then loadedModules = loadedModules + 1 end
+    if ControlPlayerModule then loadedModules = loadedModules + 1 end
     
-    if loadedModules == 3 then
+    if loadedModules == 4 then
         window:Notification("Modules Loaded", "Successfully loaded all modules from GitHub", "Okay")
     else
-        window:Notification("Modules Loaded", "Loaded "..loadedModules.."/3 modules from GitHub", "Okay")
+        window:Notification("Modules Loaded", "Loaded "..loadedModules.."/4 modules from GitHub", "Okay")
     end
 end)
