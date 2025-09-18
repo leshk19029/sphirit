@@ -12,6 +12,10 @@ local speedEnabled = false
 local currentSpeed = 25
 local velocityConnection = nil
 
+-- Anti Effects variables
+local antiEffectsEnabled = false
+local antiEffectsConnection = nil
+
 local function controlPlayer(player)
     if controlledPlayer and controlledPlayer.Character and controlledPlayer.Character:FindFirstChild("HumanoidRootPart") then
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
@@ -74,35 +78,115 @@ local function toggleSpeedBoost(state)
     end
 end
 
-local playerList = {}
-for _, player in pairs(game.Players:GetPlayers()) do
-    if player ~= game.Players.LocalPlayer then
-        table.insert(playerList, player.Name)
-    end
-end
+-- Anti Effects function
+local function setupAntiEffects()
+    local lighting = game:GetService("Lighting")
+    local camera = game:GetService("Workspace").CurrentCamera
 
-mainTab:Toggle("Control Player", false, function(state)
-    if state then
-        window:Notification("Control Player", "Select a player to control from the dropdown list", "Okay")
-    else
-        stopControl()
-    end
-end)
+    -- Функция для удаления DiscoEffect и настройки эффектов + фиксации FOV
+    local function checkForDiscoEffect(child)
+        if child.Name == "DiscoEffect" then
+            child:Destroy() -- Удаляем DiscoEffect
+            
+            -- Удаляем Blur (если есть)
+            local blur = lighting:FindFirstChild("Blur")
+            if blur then
+                blur:Destroy()
+            end
 
-mainTab:Dropdown("Select Player", playerList, function(selectedPlayerName)
-    if isControlling then
-        local player = game.Players:FindFirstChild(selectedPlayerName)
-        if player then
-            controlPlayer(player)
+            -- Включаем ColorCorrection (создаём, если нет)
+            local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
+            correction.Parent = lighting
+            correction.Enabled = true
+
+            -- Фиксируем FieldOfView = 70 только при обнаружении DiscoEffect
+            camera.FieldOfView = 70 -- Устанавливаем сразу
+            
+            -- Настраиваем отслеживание изменений FOV
+            if not camera:GetPropertyChangedSignal("FieldOfView"):IsConnected() then
+                camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
+                    if camera.FieldOfView ~= 70 then
+                        camera.FieldOfView = 70 -- Принудительно возвращаем
+                    end
+                end)
+            end
         end
     end
-end)
+
+    -- Проверяем существующие объекты (на случай, если DiscoEffect уже есть)
+    for _, child in ipairs(lighting:GetChildren()) do
+        checkForDiscoEffect(child)
+    end
+
+    -- Включаем отслеживание новых объектов
+    lighting.ChildAdded:Connect(checkForDiscoEffect)
+
+    local Players = game:GetService("Players")
+    local Lighting = game:GetService("Lighting")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local RunService = game:GetService("RunService")
+
+    local localPlayer = Players.LocalPlayer
+    local playerScripts = localPlayer.PlayerScripts
+    local camera = workspace.CurrentCamera
+
+    -- Функция для восстановления управления и удаления эффектов
+    local function restoreControls()
+        -- Восстанавливаем FieldOfView камеры
+        if camera then
+            camera.FieldOfView = 70
+        end
+    end
+
+    -- Функция для проверки и удаления эффектов
+    local function checkEffects()
+        -- Удаляем эффекты, если они есть
+        for _, effectName in ipairs({"BeeBlur", "ColorCorrection"}) do
+            local effect = Lighting:FindFirstChild(effectName)
+            if effect then
+                effect:Destroy()
+            end
+        end
+    end
+
+    -- Слушатель для новых эффектов в Lighting
+    Lighting.ChildAdded:Connect(function(child)
+        if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
+            child:Destroy()
+            restoreControls() -- Дополнительно восстанавливаем управление
+        end
+    end)
+
+    -- Постоянная проверка
+    antiEffectsConnection = RunService.Heartbeat:Connect(function()
+        checkEffects()
+        restoreControls() -- Постоянно восстанавливаем управление
+    end)
+end
+
+local function toggleAntiEffects(state)
+    antiEffectsEnabled = state
+    
+    if antiEffectsEnabled then
+        setupAntiEffects()
+    else
+        if antiEffectsConnection then
+            antiEffectsConnection:Disconnect()
+            antiEffectsConnection = nil
+        end
+    end
+end
 
 -- Добавляем переключатель и слайдер для Speed Boost
 mainTab:Toggle("Speed Boost", false, function(state)
     toggleSpeedBoost(state)
 end)
 
-mainTab:Slider("Speed Value", 1, 100, 25, function(value)
+mainTab:Slider("Speed Value", 1, 45, 25, function(value)
     currentSpeed = value
+end)
+
+-- Добавляем переключатель для Anti Effects
+mainTab:Toggle("Anti Effects", false, function(state)
+    toggleAntiEffects(state)
 end)
