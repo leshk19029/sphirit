@@ -1,0 +1,76 @@
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt"))()
+
+-- Создаем главное окно
+local window = library:Window("Cool Hack Menu", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
+
+-- Добавляем вкладки
+local mainTab = window:Tab("Main")
+local combatTab = window:Tab("Combat")
+local visualTab = window:Tab("Visual")
+local settingsTab = window:Tab("Settings")
+
+-- Вкладка Main
+mainTab:Button("Print Hello", function()
+    print("Hello World!")
+end)
+
+mainTab:Toggle("Auto Farm", false, function(state)
+    print("Auto Farm:", state)
+end)
+
+mainTab:Slider("WalkSpeed", 16, 100, 16, function(value)
+    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
+    print("WalkSpeed set to:", value)
+end)
+
+mainTab:Dropdown("Select Weapon", {"Sword", "Gun", "Bow"}, function(selected)
+    print("Selected weapon:", selected)
+end)
+
+mainTab:Colorpicker("ESP Color", Color3.fromRGB(255, 0, 0), function(color)
+    print("ESP color changed to:", color)
+end)
+
+-- Вкладка Combat
+combatTab:Toggle("Aimbot", false, function(state)
+    print("Aimbot:", state)
+end)
+
+combatTab:Toggle("Wallhack", false, function(state)
+    print("Wallhack:", state)
+end)
+
+combatTab:Slider("Aimbot FOV", 1, 360, 90, function(value)
+    print("Aimbot FOV set to:", value)
+end)
+
+-- Вкладка Visual
+visualTab:Toggle("ESP", false, function(state)
+    print("ESP:", state)
+end)
+
+visualTab:Toggle("Tracers", false, function(state)
+    print("Tracers:", state)
+end)
+
+visualTab:Toggle("Chams", false, function(state)
+    print("Chams:", state)
+end)
+
+-- Вкладка Settings
+settingsTab:Label("UI Settings")
+
+settingsTab:Button("Change Theme", function()
+    library:ChangePresetColor(Color3.fromRGB(math.random(0,255), math.random(0,255), math.random(0,255)))
+end)
+
+settingsTab:Textbox("Custom Keybind", false, function(text)
+    print("Custom keybind set to:", text)
+end)
+
+settingsTab:Bind("Toggle Menu", Enum.KeyCode.RightControl, function()
+    print("Menu toggled!")
+end)
+
+-- Уведомление при запуске
+window:Notification("Welcome", "Menu loaded successfully!", "Okay")
