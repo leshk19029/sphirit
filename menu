@@ -2,7 +2,6 @@ local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid
 
 local window = library:Window("Player Controller", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
 local mainTab = window:Tab("Main")
-local espTab = window:Tab("ESP")
 
 -- Функция для загрузки модулей с GitHub
 local function loadModule(url)
@@ -17,7 +16,7 @@ local function loadModule(url)
     end
 end
 
--- Загружаем все модули с GitHub
+-- Загружаем модули с GitHub
 local SpeedBoostModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/1")
 local AntiEffectsModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/2")
 local ESPModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/esp")
@@ -57,81 +56,13 @@ else
     warn("Anti Effects module not loaded")
 end
 
--- ESP System
+-- ESP (только ползунок)
 if ESPModule then
-    -- Основной переключатель ESP
-    espTab:Toggle("Enable ESP", false, function(state)
-        espEnabled = state
-        if ESPModule.ToggleAll then
-            ESPModule.ToggleAll(state)
+    mainTab:Slider("ESP Distance", 100, 1000, 500, function(value)
+        if ESPModule.PetDisplay then
+            ESPModule.PetDisplay.MAX_DISTANCE = value
         end
     end)
-
-    -- Timer ESP
-    espTab:Toggle("Timer ESP", true, function(state)
-        if ESPModule then
-            ESPModule.TimerESP.Enabled = state
-            if state and ESPModule.InitializeTimerESP then
-                ESPModule.InitializeTimerESP()
-            end
-        end
-    end)
-
-    -- Name Tags
-    espTab:Toggle("Name Tags", true, function(state)
-        if ESPModule then
-            ESPModule.NameTags.Enabled = state
-            if state and ESPModule.ToggleNameTags then
-                ESPModule.ToggleNameTags(true)
-            elseif not state and ESPModule.ToggleNameTags then
-                ESPModule.ToggleNameTags(false)
-            end
-        end
-    end)
-
-    -- Wall Hack
-    espTab:Toggle("Wall Hack", true, function(state)
-        if ESPModule then
-            ESPModule.WallHack.Enabled = state
-            if state and ESPModule.ToggleWallHack then
-                ESPModule.ToggleWallHack(true)
-            elseif not state and ESPModule.ToggleWallHack then
-                ESPModule.ToggleWallHack(false)
-            end
-        end
-    end)
-
-    -- Pet Display
-    espTab:Toggle("Pet Display", true, function(state)
-        if ESPModule then
-            ESPModule.PetDisplay.Enabled = state
-            if state and ESPModule.TogglePetDisplay then
-                ESPModule.TogglePetDisplay(true)
-            elseif not state and ESPModule.TogglePetDisplay then
-                ESPModule.TogglePetDisplay(false)
-            end
-        end
-    end)
-
-    -- Настройки Wall Hack
-    espTab:Button("Wall Hack Settings", function()
-        if ESPModule.WallHack then
-            local fillColor = ESPModule.WallHack.FillColor
-            local outlineColor = ESPModule.WallHack.OutlineColor
-            
-            window:Notification("Wall Hack Settings", 
-                string.format("Fill Color: RGB(%d, %d, %d)\nOutline Color: RGB(%d, %d, %d)", 
-                    math.floor(fillColor.R * 255), 
-                    math.floor(fillColor.G * 255), 
-                    math.floor(fillColor.B * 255),
-                    math.floor(outlineColor.R * 255),
-                    math.floor(outlineColor.G * 255),
-                    math.floor(outlineColor.B * 255)
-                ), 
-                "Okay")
-        end
-    end)
-
 else
     warn("ESP module not loaded")
 end
