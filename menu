@@ -1,76 +1,117 @@
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/your-username/your-repo/main/library.lua"))()
 
 -- Создаем главное окно
-local window = library:Window("Cool Hack Menu", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
+local window = library:Window("Player Controller", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
 
--- Добавляем вкладки
+-- Добавляем вкладку Main
 local mainTab = window:Tab("Main")
-local combatTab = window:Tab("Combat")
-local visualTab = window:Tab("Visual")
-local settingsTab = window:Tab("Settings")
 
--- Вкладка Main
-mainTab:Button("Print Hello", function()
-    print("Hello World!")
+-- Переменные для контроля игрока
+local controlledPlayer = nil
+local isControlling = false
+local originalCFrame = nil
+
+-- Функция контроля игрока
+local function controlPlayer(player)
+    if controlledPlayer and controlledPlayer.Character and controlledPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        -- Возвращаем управление предыдущему игроку
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
+    end
+    
+    if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        -- Сохраняем оригинальную позицию
+        originalCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+        -- Телепортируемся к игроку
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
+        controlledPlayer = player
+        isControlling = true
+        return true
+    end
+    return false
+end
+
+-- Функция остановки контроля
+local function stopControl()
+    if controlledPlayer and originalCFrame then
+        -- Возвращаемся на оригинальную позицию
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
+        controlledPlayer = nil
+        isControlling = false
+        originalCFrame = nil
+    end
+end
+
+-- Список игроков для выбора
+local playerList = {}
+for _, player in pairs(game.Players:GetPlayers()) do
+    if player ~= game.Players.LocalPlayer then
+        table.insert(playerList, player.Name)
+    end
+end
+
+-- Переключатель контроля игрока
+mainTab:Toggle("Control Player", false, function(state)
+    if state then
+        -- Показываем уведомление с инструкцией
+        window:Notification("Control Player", "Select a player to control from the dropdown list", "Okay")
+    else
+        stopControl()
+        print("Player control stopped")
+    end
 end)
 
-mainTab:Toggle("Auto Farm", false, function(state)
-    print("Auto Farm:", state)
+-- Выбор игрока для контроля
+mainTab:Dropdown("Select Player", playerList, function(selectedPlayerName)
+    if isControlling then
+        local player = game.Players:FindFirstChild(selectedPlayerName)
+        if player then
+            if controlPlayer(player) then
+                print("Now controlling:", selectedPlayerName)
+            else
+                print("Failed to control:", selectedPlayerName)
+            end
+        end
+    end
 end)
 
-mainTab:Slider("WalkSpeed", 16, 100, 16, function(value)
-    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
-    print("WalkSpeed set to:", value)
+-- Кнопка для обновления списка игроков
+mainTab:Button("Refresh Player List", function()
+    playerList = {}
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            table.insert(playerList, player.Name)
+        end
+    end
+    print("Player list refreshed")
 end)
 
-mainTab:Dropdown("Select Weapon", {"Sword", "Gun", "Bow"}, function(selected)
-    print("Selected weapon:", selected)
+-- Настройки контроля
+mainTab:Slider("Control Distance", 1, 50, 5, function(value)
+    print("Control distance set to:", value)
 end)
 
-mainTab:Colorpicker("ESP Color", Color3.fromRGB(255, 0, 0), function(color)
-    print("ESP color changed to:", color)
+mainTab:Toggle("Follow Player", false, function(state)
+    print("Follow player:", state)
 end)
 
--- Вкладка Combat
-combatTab:Toggle("Aimbot", false, function(state)
-    print("Aimbot:", state)
+mainTab:Toggle("Copy Movements", false, function(state)
+    print("Copy movements:", state)
 end)
 
-combatTab:Toggle("Wallhack", false, function(state)
-    print("Wallhack:", state)
+-- Кнопка остановки контроля
+mainTab:Button("Stop Control", function()
+    stopControl()
+    print("Control stopped")
 end)
 
-combatTab:Slider("Aimbot FOV", 1, 360, 90, function(value)
-    print("Aimbot FOV set to:", value)
-end)
+-- Информация о текущем контроле
+mainTab:Label("Current Control: None")
 
--- Вкладка Visual
-visualTab:Toggle("ESP", false, function(state)
-    print("ESP:", state)
-end)
-
-visualTab:Toggle("Tracers", false, function(state)
-    print("Tracers:", state)
-end)
-
-visualTab:Toggle("Chams", false, function(state)
-    print("Chams:", state)
-end)
-
--- Вкладка Settings
-settingsTab:Label("UI Settings")
-
-settingsTab:Button("Change Theme", function()
-    library:ChangePresetColor(Color3.fromRGB(math.random(0,255), math.random(0,255), math.random(0,255)))
-end)
-
-settingsTab:Textbox("Custom Keybind", false, function(text)
-    print("Custom keybind set to:", text)
-end)
-
-settingsTab:Bind("Toggle Menu", Enum.KeyCode.RightControl, function()
-    print("Menu toggled!")
+-- Бинд для быстрой остановки контроля
+mainTab:Bind("Emergency Stop", Enum.KeyCode.X, function()
+    stopControl()
+    print("Emergency stop activated")
 end)
 
 -- Уведомление при запуске
-window:Notification("Welcome", "Menu loaded successfully!", "Okay")
+window:Notification("Player Controller", "Use RightControl to toggle menu\nSelect a player to control", "Got it")
