@@ -7,6 +7,11 @@ local controlledPlayer = nil
 local isControlling = false
 local originalCFrame = nil
 
+-- Speed Boost variables
+local speedEnabled = false
+local currentSpeed = 25
+local velocityConnection = nil
+
 local function controlPlayer(player)
     if controlledPlayer and controlledPlayer.Character and controlledPlayer.Character:FindFirstChild("HumanoidRootPart") then
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
@@ -28,6 +33,44 @@ local function stopControl()
         controlledPlayer = nil
         isControlling = false
         originalCFrame = nil
+    end
+end
+
+-- Speed Boost function
+local function applyVelocity()
+    if not speedEnabled then return end
+    
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    
+    if humanoid and rootPart then
+        local moveDirection = humanoid.MoveDirection
+        if moveDirection.Magnitude > 0 then
+            local velocity = moveDirection * currentSpeed
+            rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
+        else
+            rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+        end
+    end
+end
+
+local function toggleSpeedBoost(state)
+    speedEnabled = state
+    
+    if speedEnabled then
+        if velocityConnection then
+            velocityConnection:Disconnect()
+        end
+        velocityConnection = game:GetService("RunService").RenderStepped:Connect(applyVelocity)
+    else
+        if velocityConnection then
+            velocityConnection:Disconnect()
+            velocityConnection = nil
+        end
     end
 end
 
@@ -53,4 +96,13 @@ mainTab:Dropdown("Select Player", playerList, function(selectedPlayerName)
             controlPlayer(player)
         end
     end
+end)
+
+-- Добавляем переключатель и слайдер для Speed Boost
+mainTab:Toggle("Speed Boost", false, function(state)
+    toggleSpeedBoost(state)
+end)
+
+mainTab:Slider("Speed Value", 1, 100, 25, function(value)
+    currentSpeed = value
 end)
