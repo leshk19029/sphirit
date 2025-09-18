@@ -56,11 +56,12 @@ else
     warn("Anti Effects module not loaded")
 end
 
--- ESP (только ползунок)
+-- ESP (только переключатель)
 if ESPModule then
-    mainTab:Slider("ESP Distance", 100, 1000, 500, function(value)
-        if ESPModule.PetDisplay then
-            ESPModule.PetDisplay.MAX_DISTANCE = value
+    mainTab:Toggle("ESP", false, function(state)
+        espEnabled = state
+        if ESPModule.ToggleAll then
+            ESPModule.ToggleAll(state)
         end
     end)
 else
