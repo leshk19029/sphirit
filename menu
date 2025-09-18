@@ -2,191 +2,151 @@ local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid
 
 local window = library:Window("Player Controller", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
 local mainTab = window:Tab("Main")
+local espTab = window:Tab("ESP")
 
-local controlledPlayer = nil
-local isControlling = false
-local originalCFrame = nil
+-- Функция для загрузки модулей с GitHub
+local function loadModule(url)
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    if success then
+        return result
+    else
+        warn("Failed to load module from: " .. url)
+        return nil
+    end
+end
 
--- Speed Boost variables
+-- Загружаем все модули с GitHub
+local SpeedBoostModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/speed_boost.lua")
+local AntiEffectsModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/anti_effects.lua")
+local ESPModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/esp_module.lua")
+
+-- Переменные для управления функциями
 local speedEnabled = false
-local currentSpeed = 25
-local velocityConnection = nil
-
--- Anti Effects variables
 local antiEffectsEnabled = false
-local antiEffectsConnection = nil
+local espEnabled = false
 
-local function controlPlayer(player)
-    if controlledPlayer and controlledPlayer.Character and controlledPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
-    end
-    
-    if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        originalCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
-        controlledPlayer = player
-        isControlling = true
-        return true
-    end
-    return false
-end
-
-local function stopControl()
-    if controlledPlayer and originalCFrame then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
-        controlledPlayer = nil
-        isControlling = false
-        originalCFrame = nil
-    end
-end
-
--- Speed Boost function
-local function applyVelocity()
-    if not speedEnabled then return end
-    
-    local player = game.Players.LocalPlayer
-    local character = player.Character
-    if not character then return end
-    
-    local humanoid = character:FindFirstChild("Humanoid")
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    
-    if humanoid and rootPart then
-        local moveDirection = humanoid.MoveDirection
-        if moveDirection.Magnitude > 0 then
-            local velocity = moveDirection * currentSpeed
-            rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
-        else
-            rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
-        end
-    end
-end
-
-local function toggleSpeedBoost(state)
-    speedEnabled = state
-    
-    if speedEnabled then
-        if velocityConnection then
-            velocityConnection:Disconnect()
-        end
-        velocityConnection = game:GetService("RunService").RenderStepped:Connect(applyVelocity)
-    else
-        if velocityConnection then
-            velocityConnection:Disconnect()
-            velocityConnection = nil
-        end
-    end
-end
-
--- Anti Effects function
-local function setupAntiEffects()
-    local lighting = game:GetService("Lighting")
-    local camera = game:GetService("Workspace").CurrentCamera
-
-    -- Функция для удаления DiscoEffect и настройки эффектов + фиксации FOV
-    local function checkForDiscoEffect(child)
-        if child.Name == "DiscoEffect" then
-            child:Destroy() -- Удаляем DiscoEffect
-            
-            -- Удаляем Blur (если есть)
-            local blur = lighting:FindFirstChild("Blur")
-            if blur then
-                blur:Destroy()
-            end
-
-            -- Включаем ColorCorrection (создаём, если нет)
-            local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
-            correction.Parent = lighting
-            correction.Enabled = true
-
-            -- Фиксируем FieldOfView = 70 только при обнаружении DiscoEffect
-            camera.FieldOfView = 70 -- Устанавливаем сразу
-            
-            -- Настраиваем отслеживание изменений FOV
-            if not camera:GetPropertyChangedSignal("FieldOfView"):IsConnected() then
-                camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
-                    if camera.FieldOfView ~= 70 then
-                        camera.FieldOfView = 70 -- Принудительно возвращаем
-                    end
-                end)
-            end
-        end
-    end
-
-    -- Проверяем существующие объекты (на случай, если DiscoEffect уже есть)
-    for _, child in ipairs(lighting:GetChildren()) do
-        checkForDiscoEffect(child)
-    end
-
-    -- Включаем отслеживание новых объектов
-    lighting.ChildAdded:Connect(checkForDiscoEffect)
-
-    local Players = game:GetService("Players")
-    local Lighting = game:GetService("Lighting")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local RunService = game:GetService("RunService")
-
-    local localPlayer = Players.LocalPlayer
-    local playerScripts = localPlayer.PlayerScripts
-    local camera = workspace.CurrentCamera
-
-    -- Функция для восстановления управления и удаления эффектов
-    local function restoreControls()
-        -- Восстанавливаем FieldOfView камеры
-        if camera then
-            camera.FieldOfView = 70
-        end
-    end
-
-    -- Функция для проверки и удаления эффектов
-    local function checkEffects()
-        -- Удаляем эффекты, если они есть
-        for _, effectName in ipairs({"BeeBlur", "ColorCorrection"}) do
-            local effect = Lighting:FindFirstChild(effectName)
-            if effect then
-                effect:Destroy()
-            end
-        end
-    end
-
-    -- Слушатель для новых эффектов в Lighting
-    Lighting.ChildAdded:Connect(function(child)
-        if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
-            child:Destroy()
-            restoreControls() -- Дополнительно восстанавливаем управление
+-- Speed Boost
+if SpeedBoostModule then
+    mainTab:Toggle("Speed Boost", false, function(state)
+        speedEnabled = state
+        if SpeedBoostModule.toggleSpeedBoost then
+            SpeedBoostModule.toggleSpeedBoost(state)
         end
     end)
 
-    -- Постоянная проверка
-    antiEffectsConnection = RunService.Heartbeat:Connect(function()
-        checkEffects()
-        restoreControls() -- Постоянно восстанавливаем управление
-    end)
-end
-
-local function toggleAntiEffects(state)
-    antiEffectsEnabled = state
-    
-    if antiEffectsEnabled then
-        setupAntiEffects()
-    else
-        if antiEffectsConnection then
-            antiEffectsConnection:Disconnect()
-            antiEffectsConnection = nil
+    mainTab:Slider("Speed Value", 1, 45, 25, function(value)
+        if SpeedBoostModule.setSpeed then
+            SpeedBoostModule.setSpeed(value)
         end
-    end
+    end)
+else
+    warn("Speed Boost module not loaded")
 end
 
--- Добавляем переключатель и слайдер для Speed Boost
-mainTab:Toggle("Speed Boost", false, function(state)
-    toggleSpeedBoost(state)
-end)
+-- Anti Effects
+if AntiEffectsModule then
+    mainTab:Toggle("Anti Effects", false, function(state)
+        antiEffectsEnabled = state
+        if AntiEffectsModule.toggleAntiEffects then
+            AntiEffectsModule.toggleAntiEffects(state)
+        end
+    end)
+else
+    warn("Anti Effects module not loaded")
+end
 
-mainTab:Slider("Speed Value", 1, 45, 25, function(value)
-    currentSpeed = value
-end)
+-- ESP System
+if ESPModule then
+    -- Основной переключатель ESP
+    espTab:Toggle("Enable ESP", false, function(state)
+        espEnabled = state
+        if ESPModule.ToggleAll then
+            ESPModule.ToggleAll(state)
+        end
+    end)
 
--- Добавляем переключатель для Anti Effects
-mainTab:Toggle("Anti Effects", false, function(state)
-    toggleAntiEffects(state)
+    -- Timer ESP
+    espTab:Toggle("Timer ESP", true, function(state)
+        if ESPModule then
+            ESPModule.TimerESP.Enabled = state
+            if state and ESPModule.InitializeTimerESP then
+                ESPModule.InitializeTimerESP()
+            end
+        end
+    end)
+
+    -- Name Tags
+    espTab:Toggle("Name Tags", true, function(state)
+        if ESPModule then
+            ESPModule.NameTags.Enabled = state
+            if state and ESPModule.ToggleNameTags then
+                ESPModule.ToggleNameTags(true)
+            elseif not state and ESPModule.ToggleNameTags then
+                ESPModule.ToggleNameTags(false)
+            end
+        end
+    end)
+
+    -- Wall Hack
+    espTab:Toggle("Wall Hack", true, function(state)
+        if ESPModule then
+            ESPModule.WallHack.Enabled = state
+            if state and ESPModule.ToggleWallHack then
+                ESPModule.ToggleWallHack(true)
+            elseif not state and ESPModule.ToggleWallHack then
+                ESPModule.ToggleWallHack(false)
+            end
+        end
+    end)
+
+    -- Pet Display
+    espTab:Toggle("Pet Display", true, function(state)
+        if ESPModule then
+            ESPModule.PetDisplay.Enabled = state
+            if state and ESPModule.TogglePetDisplay then
+                ESPModule.TogglePetDisplay(true)
+            elseif not state and ESPModule.TogglePetDisplay then
+                ESPModule.TogglePetDisplay(false)
+            end
+        end
+    end)
+
+    -- Настройки Wall Hack
+    espTab:Button("Wall Hack Settings", function()
+        if ESPModule.WallHack then
+            local fillColor = ESPModule.WallHack.FillColor
+            local outlineColor = ESPModule.WallHack.OutlineColor
+            
+            window:Notification("Wall Hack Settings", 
+                string.format("Fill Color: RGB(%d, %d, %d)\nOutline Color: RGB(%d, %d, %d)", 
+                    math.floor(fillColor.R * 255), 
+                    math.floor(fillColor.G * 255), 
+                    math.floor(fillColor.B * 255),
+                    math.floor(outlineColor.R * 255),
+                    math.floor(outlineColor.G * 255),
+                    math.floor(outlineColor.B * 255)
+                ), 
+                "Okay")
+        end
+    end)
+
+else
+    warn("ESP module not loaded")
+end
+
+-- Уведомление о успешной загрузке
+task.spawn(function()
+    wait(1)
+    local loadedModules = 0
+    if SpeedBoostModule then loadedModules = loadedModules + 1 end
+    if AntiEffectsModule then loadedModules = loadedModules + 1 end
+    if ESPModule then loadedModules = loadedModules + 1 end
+    
+    if loadedModules == 3 then
+        window:Notification("Modules Loaded", "Successfully loaded all modules from GitHub", "Okay")
+    else
+        window:Notification("Modules Loaded", "Loaded "..loadedModules.."/3 modules from GitHub", "Okay")
+    end
 end)
