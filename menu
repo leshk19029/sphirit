@@ -72,7 +72,7 @@ end
 
 -- Control Player
 if ControlPlayerModule then
-    mainTab:Toggle("Control Player (F)", false, function(state)
+    mainTab:Toggle("Control Player", false, function(state)
         controlPlayerEnabled = state
         if ControlPlayerModule.toggleControlPlayer then
             ControlPlayerModule.toggleControlPlayer(state)
