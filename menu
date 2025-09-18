@@ -18,9 +18,9 @@ local function loadModule(url)
 end
 
 -- Загружаем все модули с GitHub
-local SpeedBoostModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/speed_boost.lua")
-local AntiEffectsModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/anti_effects.lua")
-local ESPModule = loadModule("https://raw.githubusercontent.com/your-username/your-repo/main/esp_module.lua")
+local SpeedBoostModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/1")
+local AntiEffectsModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/2")
+local ESPModule = loadModule("https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/esp")
 
 -- Переменные для управления функциями
 local speedEnabled = false
