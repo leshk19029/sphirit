@@ -1,0 +1,81 @@
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local module = {}
+
+local antiEffectsEnabled = false
+local antiEffectsConnection = nil
+
+local function setupAntiEffects()
+    local lighting = Lighting
+    local camera = Workspace.CurrentCamera
+
+    local function checkForDiscoEffect(child)
+        if child.Name == "DiscoEffect" then
+            child:Destroy()
+            
+            local blur = lighting:FindFirstChild("Blur")
+            if blur then
+                blur:Destroy()
+            end
+
+            local correction = lighting:FindFirstChild("ColorCorrection") or Instance.new("ColorCorrection")
+            correction.Parent = lighting
+            correction.Enabled = true
+
+            if camera then
+                camera.FieldOfView = 70
+                
+                if not camera:GetPropertyChangedSignal("FieldOfView"):IsConnected() then
+                    camera:GetPropertyChangedSignal("FieldOfView"):Connect(function()
+                        if camera.FieldOfView ~= 70 then
+                            camera.FieldOfView = 70
+                        end
+                    end)
+                end
+            end
+        end
+    end
+
+    for _, child in ipairs(lighting:GetChildren()) do
+        checkForDiscoEffect(child)
+    end
+
+    lighting.ChildAdded:Connect(checkForDiscoEffect)
+
+    local function checkEffects()
+        for _, effectName in ipairs({"BeeBlur", "ColorCorrection"}) do
+            local effect = Lighting:FindFirstChild(effectName)
+            if effect then
+                effect:Destroy()
+            end
+        end
+    end
+
+    Lighting.ChildAdded:Connect(function(child)
+        if child.Name == "BeeBlur" or child.Name == "ColorCorrection" then
+            child:Destroy()
+        end
+    end)
+
+    antiEffectsConnection = RunService.Heartbeat:Connect(function()
+        checkEffects()
+    end)
+end
+
+function module.toggleAntiEffects(state)
+    antiEffectsEnabled = state
+    
+    if antiEffectsEnabled then
+        setupAntiEffects()
+    else
+        if antiEffectsConnection then
+            antiEffectsConnection:Disconnect()
+            antiEffectsConnection = nil
+        end
+    end
+end
+
+return module
