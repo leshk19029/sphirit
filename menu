@@ -1,27 +1,19 @@
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt"))()
 
--- Создаем главное окно
 local window = library:Window("Player Controller", Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
-
--- Добавляем вкладку Main
 local mainTab = window:Tab("Main")
 
--- Переменные для контроля игрока
 local controlledPlayer = nil
 local isControlling = false
 local originalCFrame = nil
 
--- Функция контроля игрока
 local function controlPlayer(player)
     if controlledPlayer and controlledPlayer.Character and controlledPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        -- Возвращаем управление предыдущему игроку
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
     end
     
     if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        -- Сохраняем оригинальную позицию
         originalCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-        -- Телепортируемся к игроку
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
         controlledPlayer = player
         isControlling = true
@@ -30,10 +22,8 @@ local function controlPlayer(player)
     return false
 end
 
--- Функция остановки контроля
 local function stopControl()
     if controlledPlayer and originalCFrame then
-        -- Возвращаемся на оригинальную позицию
         game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = originalCFrame
         controlledPlayer = nil
         isControlling = false
@@ -41,7 +31,6 @@ local function stopControl()
     end
 end
 
--- Список игроков для выбора
 local playerList = {}
 for _, player in pairs(game.Players:GetPlayers()) do
     if player ~= game.Players.LocalPlayer then
@@ -49,69 +38,19 @@ for _, player in pairs(game.Players:GetPlayers()) do
     end
 end
 
--- Переключатель контроля игрока
 mainTab:Toggle("Control Player", false, function(state)
     if state then
-        -- Показываем уведомление с инструкцией
         window:Notification("Control Player", "Select a player to control from the dropdown list", "Okay")
     else
         stopControl()
-        print("Player control stopped")
     end
 end)
 
--- Выбор игрока для контроля
 mainTab:Dropdown("Select Player", playerList, function(selectedPlayerName)
     if isControlling then
         local player = game.Players:FindFirstChild(selectedPlayerName)
         if player then
-            if controlPlayer(player) then
-                print("Now controlling:", selectedPlayerName)
-            else
-                print("Failed to control:", selectedPlayerName)
-            end
+            controlPlayer(player)
         end
     end
 end)
-
--- Кнопка для обновления списка игроков
-mainTab:Button("Refresh Player List", function()
-    playerList = {}
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= game.Players.LocalPlayer then
-            table.insert(playerList, player.Name)
-        end
-    end
-    print("Player list refreshed")
-end)
-
--- Настройки контроля
-mainTab:Slider("Control Distance", 1, 50, 5, function(value)
-    print("Control distance set to:", value)
-end)
-
-mainTab:Toggle("Follow Player", false, function(state)
-    print("Follow player:", state)
-end)
-
-mainTab:Toggle("Copy Movements", false, function(state)
-    print("Copy movements:", state)
-end)
-
--- Кнопка остановки контроля
-mainTab:Button("Stop Control", function()
-    stopControl()
-    print("Control stopped")
-end)
-
--- Информация о текущем контроле
-mainTab:Label("Current Control: None")
-
--- Бинд для быстрой остановки контроля
-mainTab:Bind("Emergency Stop", Enum.KeyCode.X, function()
-    stopControl()
-    print("Emergency stop activated")
-end)
-
--- Уведомление при запуске
-window:Notification("Player Controller", "Use RightControl to toggle menu\nSelect a player to control", "Got it")
