@@ -207,12 +207,15 @@ local function findNearestSpawn()
                 if spawn then
                     local spawnZ = spawn.Position.Z
                     
+                    -- ВСЕГДА выбираем ближайшую Z-координату из пары к текущей позиции игрока
                     local targetZ = nil
                     for _, pair in ipairs(zCoordinatePairs) do
                         local dist1 = math.abs(spawnZ - pair[1])
                         local dist2 = math.abs(spawnZ - pair[2])
                         
+                        -- Если Z спавна близко к одной из координат в паре
                         if dist1 < 10 or dist2 < 10 then
+                            -- ВСЕГДА выбираем ту Z-координату, которая ближе к текущей позиции игрока
                             if math.abs(playerPosition.Z - pair[1]) < math.abs(playerPosition.Z - pair[2]) then
                                 targetZ = pair[1]
                             else
@@ -230,6 +233,7 @@ local function findNearestSpawn()
                             targetZ
                         )
                     else
+                        -- Если не нашли подходящую пару, используем оригинальную Z спавна
                         targetPosition = Vector3.new(
                             spawn.Position.X,
                             spawn.Position.Y - 4,
@@ -265,7 +269,7 @@ local function smoothFlyToTarget(targetPosition)
     
     local startPosition = character.PrimaryPart.Position
     local startTime = tick()
-    local duration = 2.0 -- Увеличил время для более плавного полета
+    local duration = 1.5 -- Уменьшил время полета
     
     statusLabel.Text = "Статус: Полёт..."
     
@@ -279,14 +283,11 @@ local function smoothFlyToTarget(targetPosition)
         local elapsed = tick() - startTime
         local alpha = math.min(elapsed / duration, 1)
         
-        -- Параболическая траектория (как при прыжке)
-        local parabolicAlpha = math.sin(alpha * math.pi)
-        
         local currentPosition = character.PrimaryPart.Position
         local distanceToTarget = (targetPosition - currentPosition).Magnitude
         
         -- Если достигли цели, устанавливаем Anchored
-        if distanceToTarget <= 5 then
+        if distanceToTarget <= 3 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
@@ -298,28 +299,19 @@ local function smoothFlyToTarget(targetPosition)
             return
         end
         
-        -- Вычисляем направление и расстояние
+        -- Вычисляем направление к цели
         local direction = (targetPosition - currentPosition).Unit
-        local horizontalDistance = Vector3.new(targetPosition.X - currentPosition.X, 0, targetPosition.Z - currentPosition.Z).Magnitude
-        local verticalDistance = targetPosition.Y - currentPosition.Y
         
-        -- Вычисляем скорость (горизонтальная и вертикальная отдельно)
-        local horizontalSpeed = math.min(horizontalDistance * 2, 80) -- Макс скорость 80
-        local verticalSpeed = math.min(math.abs(verticalDistance) * 3, 50) -- Макс вертикальная скорость 50
+        -- Более агрессивное движение - летим прямо к цели
+        local speed = math.min(distanceToTarget * 4, 100) -- Увеличил скорость
         
-        -- Создаем вектор скорости
-        local velocity = Vector3.new(
-            direction.X * horizontalSpeed,
-            direction.Y * verticalSpeed,
-            direction.Z * horizontalSpeed
-        )
+        -- Применяем Velocity прямо к цели
+        character.PrimaryPart.Velocity = direction * speed
         
-        -- Применяем Velocity (как при прыжке)
-        character.PrimaryPart.Velocity = velocity
-        
-        -- Небольшая корректировка высоты для плавности
-        if alpha < 0.7 then
-            character.PrimaryPart.Velocity = character.PrimaryPart.Velocity + Vector3.new(0, 5, 0) -- Легкий подъем
+        -- Небольшая корректировка для точности приземления
+        if distanceToTarget < 10 then
+            -- Замедляемся при приближении к цели
+            character.PrimaryPart.Velocity = direction * (distanceToTarget * 2)
         end
         
         if alpha >= 1 then
@@ -380,6 +372,7 @@ local function activateFlightToSpawn()
     
     local nearestSpawn = findNearestSpawn()
     if nearestSpawn then
+        statusLabel.Text = "Статус: Летим к ближайшей Z..."
         smoothFlyToTarget(nearestSpawn)
     else
         statusLabel.Text = "Статус: Spawn не найден"
