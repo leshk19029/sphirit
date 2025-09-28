@@ -16,6 +16,7 @@ local scriptActive = true
 local flightEnabled = false
 local originalProperties = {}
 local originalAnchoredState = false
+local targetZ = nil
 
 -- Создаем интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -240,6 +241,7 @@ local function findNearestSpawn()
                         if distance < shortestDistance then
                             shortestDistance = distance
                             nearestSpawn = targetPosition
+                            targetZ = finalTargetZ
                         end
                     else
                         -- Если не нашли подходящую пару, используем оригинальную Z спавна
@@ -253,6 +255,7 @@ local function findNearestSpawn()
                         if distance < shortestDistance then
                             shortestDistance = distance
                             nearestSpawn = targetPosition
+                            targetZ = spawn.Position.Z
                         end
                     end
                 end
@@ -261,6 +264,29 @@ local function findNearestSpawn()
     end
     
     return nearestSpawn
+end
+
+local function calculateLookDirection(currentPosition, targetPosition, targetZValue)
+    -- Определяем направление взгляда в зависимости от целевой Z координаты
+    local direction
+    
+    -- Если летим к меньшей Z координате, смотрим в отрицательном направлении Z
+    -- Если к большей Z координате, смотрим в положительном направлении Z
+    if targetZValue then
+        local currentZ = currentPosition.Z
+        if currentZ > targetZValue then
+            -- Летим к меньшей Z, смотрим назад (отрицательное направление Z)
+            direction = Vector3.new(0, 0, -1)
+        else
+            -- Летим к большей Z, смотрим вперед (положительное направление Z)
+            direction = Vector3.new(0, 0, 1)
+        end
+    else
+        -- Если targetZ не определен, используем направление к цели
+        direction = (targetPosition - currentPosition).Unit
+    end
+    
+    return direction
 end
 
 local function smoothFlyToTarget(targetPosition)
@@ -308,6 +334,16 @@ local function smoothFlyToTarget(targetPosition)
         -- Применяем скорость
         character.PrimaryPart.Velocity = direction * speed
         
+        -- Поворачиваем персонажа в сторону движения к Z координате
+        local lookDirection = calculateLookDirection(currentPosition, targetPosition, targetZ)
+        if lookDirection then
+            -- Устанавливаем поворот персонажа
+            character.PrimaryPart.CFrame = CFrame.new(
+                character.PrimaryPart.Position,
+                character.PrimaryPart.Position + lookDirection
+            )
+        end
+        
         -- Точная корректировка высоты для точного приземления
         local heightDiff = targetPosition.Y - currentPosition.Y
         if math.abs(heightDiff) > 0.5 then
@@ -327,6 +363,7 @@ end
 
 local function deactivateFlightMode()
     isFloating = false
+    targetZ = nil
     
     -- Восстанавливаем прозрачность и CanCollide для plot
     restorePlotTransparency()
