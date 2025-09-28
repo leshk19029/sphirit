@@ -145,6 +145,14 @@ local function restorePlotTransparency()
     return true
 end
 
+-- Функция для вычисления направления поворота
+local function calculateLookDirection(startPos, targetPos)
+    local direction = (targetPos - startPos).Unit
+    -- Поворачиваем на 180 градусов (противоположное направление)
+    local oppositeDirection = -direction
+    return CFrame.lookAt(Vector3.new(0, 0, 0), oppositeDirection)
+end
+
 -- Основные функции
 local function findNearestPlot()
     local plots = workspace.Plots:GetChildren()
@@ -264,15 +272,6 @@ local function findNearestSpawn()
     return nearestSpawn
 end
 
-local function getCharacterSize(character)
-    -- Получаем размеры персонажа для точного позиционирования
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        return humanoid.HipHeight + 2 -- Добавляем небольшой запас
-    end
-    return 3 -- Стандартная высота по умолчанию
-end
-
 local function smoothFlyToTarget(targetPosition)
     local character = player.Character
     if not character or not character.PrimaryPart then return false end
@@ -304,127 +303,68 @@ local function smoothFlyToTarget(targetPosition)
         -- Если осталось менее 3 studs, останавливаемся и устанавливаем Anchored
         if distanceToTarget <= 3 then
             connection:Disconnect()
+            statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
-            -- ТОЧНОЕ ПОЗИЦИОНИРОВАНИЕ ПО Z
-            local currentPos = character.PrimaryPart.Position
-            local characterSize = getCharacterSize(character)
+            if floatConnection then floatConnection:Disconnect() end
             
-            -- Определяем направление движения по Z
-            local zDirection = targetPosition.Z > currentPos.Z and 1 or -1
+            -- Устанавливаем Anchored и останавливаем все движения
+            character.PrimaryPart.Anchored = true
+            character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+            character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
             
-            -- Вычисляем финальную позицию с учетом размера персонажа
-            local finalPosition = Vector3.new(
-                targetPosition.X,
-                targetPosition.Y + characterSize, -- Учитываем высоту персонажа
-                targetPosition.Z - (zDirection * characterSize * 0.5) -- Отступаем от объекта по Z
-            )
-            
-            -- Плавно перемещаем к финальной позиции
-            local finalStartTime = tick()
-            local finalDuration = 0.3
-            
-            local finalConnection
-            finalConnection = RunService.Heartbeat:Connect(function()
-                local finalElapsed = tick() - finalStartTime
-                local finalAlpha = math.min(finalElapsed / finalDuration, 1)
-                local finalSmoothAlpha = 1 - (1 - finalAlpha) * (1 - finalAlpha)
-                
-                local newPos = currentPos:Lerp(finalPosition, finalSmoothAlpha)
-                character.PrimaryPart.CFrame = CFrame.new(newPos)
-                
-                if finalAlpha >= 1 then
-                    finalConnection:Disconnect()
-                    statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
-                    
+            floatConnection = RunService.Heartbeat:Connect(function()
+                if not character or not character.PrimaryPart or not isFloating then
                     if floatConnection then floatConnection:Disconnect() end
-                    
-                    -- Устанавливаем Anchored и останавливаем все движения
-                    character.PrimaryPart.Anchored = true
-                    character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                    character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-                    
-                    floatConnection = RunService.Heartbeat:Connect(function()
-                        if not character or not character.PrimaryPart or not isFloating then
-                            if floatConnection then floatConnection:Disconnect() end
-                            return
-                        end
-                        -- Поддерживаем Anchored состояние
-                        character.PrimaryPart.Anchored = true
-                        character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-                    end)
-                    
-                    table.insert(currentConnections, floatConnection)
+                    return
                 end
+                -- Поддерживаем Anchored состояние
+                character.PrimaryPart.Anchored = true
+                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
             end)
             
-            table.insert(currentConnections, finalConnection)
+            table.insert(currentConnections, floatConnection)
             return
         end
         
         -- Продолжаем движение к цели
         local newPosition = startPosition:Lerp(targetPosition, smoothAlpha)
         
+        -- Вычисляем направление движения и поворачиваем персонажа в противоположную сторону
+        local moveDirection = (targetPosition - startPosition).Unit
+        if moveDirection.Magnitude > 0 then
+            local lookCFrame = calculateLookDirection(startPosition, targetPosition)
+            character.PrimaryPart.CFrame = CFrame.new(newPosition) * lookCFrame
+        else
+            character.PrimaryPart.CFrame = CFrame.new(newPosition)
+        end
+        
         character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-        character.PrimaryPart.CFrame = CFrame.new(newPosition)
+        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
         
         if alpha >= 1 then
             connection:Disconnect()
+            statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
-            -- ТОЧНОЕ ПОЗИЦИОНИРОВАНИЕ ПО Z (на случай если не сработала первая проверка)
-            local currentPos = character.PrimaryPart.Position
-            local characterSize = getCharacterSize(character)
+            if floatConnection then floatConnection:Disconnect() end
             
-            -- Определяем направление движения по Z
-            local zDirection = targetPosition.Z > currentPos.Z and 1 or -1
+            -- Устанавливаем Anchored и останавливаем все движения
+            character.PrimaryPart.Anchored = true
+            character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+            character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
             
-            -- Вычисляем финальную позицию с учетом размера персонажа
-            local finalPosition = Vector3.new(
-                targetPosition.X,
-                targetPosition.Y + characterSize, -- Учитываем высоту персонажа
-                targetPosition.Z - (zDirection * characterSize * 0.5) -- Отступаем от объекта по Z
-            )
-            
-            -- Плавно перемещаем к финальной позиции
-            local finalStartTime = tick()
-            local finalDuration = 0.3
-            
-            local finalConnection
-            finalConnection = RunService.Heartbeat:Connect(function()
-                local finalElapsed = tick() - finalStartTime
-                local finalAlpha = math.min(finalElapsed / finalDuration, 1)
-                local finalSmoothAlpha = 1 - (1 - finalAlpha) * (1 - finalAlpha)
-                
-                local newPos = currentPos:Lerp(finalPosition, finalSmoothAlpha)
-                character.PrimaryPart.CFrame = CFrame.new(newPos)
-                
-                if finalAlpha >= 1 then
-                    finalConnection:Disconnect()
-                    statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
-                    
+            floatConnection = RunService.Heartbeat:Connect(function()
+                if not character or not character.PrimaryPart or not isFloating then
                     if floatConnection then floatConnection:Disconnect() end
-                    
-                    -- Устанавливаем Anchored и останавливаем все движения
-                    character.PrimaryPart.Anchored = true
-                    character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                    character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-                    
-                    floatConnection = RunService.Heartbeat:Connect(function()
-                        if not character or not character.PrimaryPart or not isFloating then
-                            if floatConnection then floatConnection:Disconnect() end
-                            return
-                        end
-                        -- Поддерживаем Anchored состояние
-                        character.PrimaryPart.Anchored = true
-                        character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-                    end)
-                    
-                    table.insert(currentConnections, floatConnection)
+                    return
                 end
+                -- Поддерживаем Anchored состояние
+                character.PrimaryPart.Anchored = true
+                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
             end)
             
-            table.insert(currentConnections, finalConnection)
+            table.insert(currentConnections, floatConnection)
         end
     end)
     
