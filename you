@@ -236,7 +236,7 @@ local function findNearestSpawn()
                         -- Если не нашли подходящую пару, используем оригинальную Z спавна
                         targetPosition = Vector3.new(
                             spawn.Position.X,
-                            spawn.Position.Y - 4,
+                            spawn.Position.Y - 3,
                             spawn.Position.Z
                         )
                     end
@@ -287,7 +287,7 @@ local function smoothFlyToTarget(targetPosition)
         local distanceToTarget = (targetPosition - currentPosition).Magnitude
         
         -- Если достигли цели, устанавливаем Anchored
-        if distanceToTarget <= 3 then
+        if distanceToTarget <= 2 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
