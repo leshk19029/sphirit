@@ -307,10 +307,10 @@ local function smoothFlyToTarget(targetPosition)
         
         if distanceToTarget > 50 then
             -- Максимальная скорость для больших расстояний
-            speed = 120
+            speed = 20
         elseif distanceToTarget > 20 then
             -- Средняя скорость
-            speed = 80
+            speed = 20
         elseif distanceToTarget > 10 then
             -- Замедление при приближении
             speed = distanceToTarget * 4
