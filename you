@@ -229,7 +229,7 @@ local function findNearestSpawn()
                     if targetZ then
                         targetPosition = Vector3.new(
                             spawn.Position.X,
-                            spawn.Position.Y - 4,
+                            spawn.Position.Y - 3,
                             targetZ
                         )
                     else
