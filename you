@@ -1,1069 +1,443 @@
-local Players = game:GetService('Players')
-local RunService = game:GetService('RunService')
-local Workspace = game:GetService('Workspace')
-local TweenService = game:GetService('TweenService')
-local TextService = game:GetService('TextService')
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
--- Кэшируем часто используемые объекты
-local localPlayer = Players.LocalPlayer
-local heartbeat = RunService.Heartbeat
+local player = Players.LocalPlayer
 
--- Предварительные вычисления
-local math_floor = math.floor
-local string_format = string.format
-local string_upper = string.upper
-local string_gsub = string.gsub
-local task_wait = task.wait
-local task_spawn = task.spawn
-local math_clamp = math.clamp
+-- Переменные состояния
+local isActive = false
+local currentPlot = nil
+local currentConnections = {}
+local isFloating = false
+local floatConnection = nil
+local scriptActive = true
+local flightEnabled = false
+local originalProperties = {}
+local originalAnchoredState = false
+local originalPlatformStand = false
 
--- Настройки ESP
-local ESP = {
-	TimerESP = {
-		Enabled = true,
-		ActiveTimers = {},
-		PlotConnections = {}, -- Новое: храним соединения для plot'ов
-	},
-	NameTags = {
-		Enabled = true,
-		ActiveNameTags = {},
-		Connections = {},
-	},
-	WallHack = {
-		Enabled = true,
-		FillColor = Color3.fromRGB(0, 170, 255),
-		FillTransparency = 0.22,
-		OutlineColor = Color3.fromRGB(0, 170, 255),
-		OutlineTransparency = 0.08,
-		Highlights = {},
-	},
-	PetDisplay = {
-		Enabled = true,
-		MAX_DISTANCE = 500,
-		AUTO_COLOR = true,
-		TEXT_STROKE_COLOR = Color3.fromRGB(0, 0, 0),
-		TEXT_STROKE_TRANSPARENCY = 0,
-		FONT = Enum.Font.SourceSans,
-		CHECK_INTERVAL = 3,
-		TEXT_SIZE = 30,
-		TEXT_OFFSET_NEAR = 12,
-		TEXT_OFFSET_FAR = 20,
-		currentBillboard = nil,
-		lastBestValue = 0,
-		lastBestName = '',
-		lastBestSalary = '',
-		currentColor = Color3.fromRGB(255, 255, 150),
-		FONT_WEIGHT = Enum.FontWeight.Bold,
-		currentTextOffset = 12,
-	},
-}
+-- Создаем интерфейс
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FlightControl"
+screenGui.Parent = CoreGui
 
--- ==================== TIMER ESP ====================
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 120)
+frame.Position = UDim2.new(0.5, -125, 0.1, 0)
+frame.AnchorPoint = Vector2.new(0.5, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BackgroundTransparency = 0.3
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
 
-local function UpdateTimerText(timerText, timeString)
-	if timeString == '0s' then
-		timerText.Text = 'UNLOCKED'
-		timerText.TextColor3 = Color3.fromRGB(0, 255, 0)
-		timerText.Font = Enum.Font.SciFi
-	else
-		timerText.Text = timeString
-		timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
-		timerText.Font = Enum.Font.SciFi
-	end
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Text = "ПОЛЕТ К SPAWN"
+title.Size = UDim2.new(1, 0, 0, 25)
+title.Position = UDim2.new(0, 0, 0, 5)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(200, 200, 200)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Center
+
+local flightToggle = Instance.new("TextButton")
+flightToggle.Size = UDim2.new(0, 80, 0, 25)
+flightToggle.Position = UDim2.new(0.1, 0, 0.3, 0)
+flightToggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+flightToggle.Text = "ВЫКЛ"
+flightToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+flightToggle.Font = Enum.Font.GothamBold
+flightToggle.TextSize = 12
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Text = "Статус: Ожидание"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+statusLabel.Position = UDim2.new(0.05, 0, 0.6, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local closeLabel = Instance.new("TextLabel")
+closeLabel.Text = "F2 - выключить | Down - отмена"
+closeLabel.Size = UDim2.new(0.9, 0, 0, 15)
+closeLabel.Position = UDim2.new(0.05, 0, 0.8, 0)
+closeLabel.BackgroundTransparency = 1
+closeLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+closeLabel.Font = Enum.Font.Gotham
+closeLabel.TextSize = 10
+closeLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Иерархия объектов
+title.Parent = frame
+flightToggle.Parent = frame
+statusLabel.Parent = frame
+closeLabel.Parent = frame
+uiCorner.Parent = frame
+frame.Parent = screenGui
+
+-- Функции для работы с прозрачностью и CanCollide
+local function setPlotTransparency(transparencyValue)
+    if not currentPlot then return false end
+    
+    originalProperties = {}
+    
+    local function processObject(obj)
+        if obj:IsA("BasePart") then
+            originalProperties[obj] = {
+                Transparency = obj.Transparency,
+                CanCollide = obj.CanCollide
+            }
+            
+            obj.CanCollide = false
+            
+            if obj.Name == "FakeRootPart" or obj.Name == "VfxInstance" then
+                obj.Transparency = 1
+            elseif obj.Name == "Hitbox" and obj.Parent and obj.Parent.Name == "Claim" then
+                obj.Transparency = 1
+            elseif obj.Name == "Spawn" then
+                -- Не изменяем прозрачность Spawn
+            else
+                obj.Transparency = transparencyValue
+            end
+        end
+    end
+    
+    local function recurse(model)
+        for _, child in ipairs(model:GetChildren()) do
+            if child:IsA("Model") or child:IsA("Folder") then
+                recurse(child)
+            else
+                processObject(child)
+            end
+        end
+    end
+    
+    recurse(currentPlot)
+    return true
 end
 
-local function CalculateYOffset(podiumCount)
-	if podiumCount > 18 then
-		return -26.27
-	elseif podiumCount > 10 then
-		return -17.27
-	else
-		return -8.27
-	end
+local function restorePlotTransparency()
+    if not currentPlot then return false end
+    
+    for obj, properties in pairs(originalProperties) do
+        if obj and obj.Parent then
+            obj.Transparency = properties.Transparency
+            obj.CanCollide = properties.CanCollide
+        end
+    end
+    
+    originalProperties = {}
+    return true
 end
 
-local function CleanupTimerData(timerData)
-	if timerData then
-		if timerData.Connection and timerData.Connection.Connected then
-			timerData.Connection:Disconnect()
-		end
-		if timerData.Billboard then
-			timerData.Billboard:Destroy()
-		end
-		if timerData.Part then
-			timerData.Part:Destroy()
-		end
-		if timerData.TimeConnection and timerData.TimeConnection.Connected then
-			timerData.TimeConnection:Disconnect()
-		end
-		if timerData.PlotConnection and timerData.PlotConnection.Connected then
-			timerData.PlotConnection:Disconnect()
-		end
-	end
+-- Основные функции
+local function findNearestPlot()
+    local plots = workspace.Plots:GetChildren()
+    local character = player.Character
+    if not character or not character.PrimaryPart then return nil end
+    
+    local playerPosition = character.PrimaryPart.Position
+    local nearestPlot = nil
+    local shortestDistance = math.huge
+    
+    for _, plot in ipairs(plots) do
+        if plot:IsA("Model") and plot.PrimaryPart then
+            local distance = (playerPosition - plot.PrimaryPart.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                nearestPlot = plot
+            end
+        end
+    end
+    
+    return nearestPlot
 end
 
-local function CreateTimerDisplay(hitbox, remainingTime, plot)
-	if not hitbox or not remainingTime or not plot then
-		return
-	end
-
-	-- Очищаем старый таймер если существует
-	if ESP.TimerESP.ActiveTimers[hitbox] then
-		CleanupTimerData(ESP.TimerESP.ActiveTimers[hitbox])
-		ESP.TimerESP.ActiveTimers[hitbox] = nil
-	end
-
-	local animalPodiums = plot:FindFirstChild('AnimalPodiums')
-	local podiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
-	local y_offset = CalculateYOffset(podiumCount)
-
-	local timerPart = Instance.new('Part')
-	timerPart.Name = 'TimerPart'
-	timerPart.Size = Vector3.new(4, 1, 1)
-	timerPart.Transparency = 1
-	timerPart.CanCollide = false
-	timerPart.Anchored = true
-	timerPart.Parent = workspace
-	timerPart.CFrame = hitbox.CFrame * CFrame.new(0, y_offset, 0)
-
-	local billboardTimer = Instance.new('BillboardGui')
-	billboardTimer.Name = 'TimerDisplay'
-	billboardTimer.Size = UDim2.new(5, 0, 2, 0)
-	billboardTimer.Adornee = timerPart
-	billboardTimer.StudsOffset = Vector3.new(0, 0, 0)
-	billboardTimer.AlwaysOnTop = true
-	billboardTimer.MaxDistance = 10000
-	billboardTimer.Parent = timerPart
-
-	local timerText = Instance.new('TextLabel')
-	timerText.Name = 'TimerText'
-	timerText.Size = UDim2.new(1, 0, 1, 0)
-	timerText.TextSize = 26
-	timerText.BackgroundTransparency = 1
-	timerText.TextColor3 = Color3.fromRGB(255, 255, 255)
-	timerText.TextStrokeColor3 = Color3.new(0, 0, 0)
-	timerText.TextStrokeTransparency = 0.1
-	timerText.Font = Enum.Font.SciFi
-	timerText.TextXAlignment = Enum.TextXAlignment.Center
-	timerText.TextYAlignment = Enum.TextYAlignment.Center
-
-	UpdateTimerText(timerText, remainingTime.Text)
-	timerText.Parent = billboardTimer
-
-	local currentYOffset = y_offset
-	local connection = heartbeat:Connect(function()
-		-- Проверяем, существуют ли все необходимые объекты
-		if not hitbox or not hitbox.Parent or not plot or not plot.Parent then
-			-- Объекты уничтожены, очищаем таймер
-			if ESP.TimerESP.ActiveTimers[hitbox] then
-				CleanupTimerData(ESP.TimerESP.ActiveTimers[hitbox])
-				ESP.TimerESP.ActiveTimers[hitbox] = nil
-			end
-			return
-		end
-
-		local newPodiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
-		local newYOffset = CalculateYOffset(newPodiumCount)
-
-		if newYOffset ~= currentYOffset then
-			currentYOffset = newYOffset
-			timerPart.CFrame = hitbox.CFrame * CFrame.new(0, currentYOffset, 0)
-		end
-	end)
-
-	-- Отслеживаем изменения времени
-	local timeConnection = remainingTime:GetPropertyChangedSignal('Text'):Connect(function()
-		if timerText and timerText.Parent then
-			UpdateTimerText(timerText, remainingTime.Text)
-		end
-	end)
-
-	-- Отслеживаем удаление plot'а
-	local plotConnection = plot.AncestryChanged:Connect(function(_, parent)
-		if not parent then
-			-- Plot был удален, очищаем таймер
-			if ESP.TimerESP.ActiveTimers[hitbox] then
-				CleanupTimerData(ESP.TimerESP.ActiveTimers[hitbox])
-				ESP.TimerESP.ActiveTimers[hitbox] = nil
-			end
-		end
-	end)
-
-	ESP.TimerESP.ActiveTimers[hitbox] = {
-		Billboard = billboardTimer,
-		Part = timerPart,
-		Connection = connection,
-		TextLabel = timerText,
-		CurrentOffset = y_offset,
-		Plot = plot,
-		TimeConnection = timeConnection,
-		PlotConnection = plotConnection,
-	}
+local function findNearestSpawn()
+    if not currentPlot then return nil end
+    
+    local animalPodiums = currentPlot:FindFirstChild("AnimalPodiums")
+    if not animalPodiums then return nil end
+    
+    local character = player.Character
+    if not character or not character.PrimaryPart then return nil end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+    
+    local rootPart = humanoid.RootPart
+    if not rootPart then return nil end
+    
+    local playerPosition = rootPart.Position
+    local nearestSpawn = nil
+    local shortestDistance = math.huge
+    
+    local zCoordinatePairs = {
+        {197.60662841796875, 243.60662841796875},
+        {-123.39336395263672, -77.3933695263672},
+        {136.60687255859375, 90.6064122314453},
+        {-13.39263153076172, -77.39263153076172},
+        {197.60736083984375, 243.6076083984375},
+        {-163.39336395263672, 29.60736846923828},
+        {90.60736846923828, 136.6073608398437},
+        {29.60663604736328, -16.39336395263672}
+    }
+    
+    local playerHeight = rootPart.Position.Y
+    local skipLowPodiums = playerHeight > 11
+    
+    for i = 11, 20 do
+        if skipLowPodiums and i <= 18 then
+            continue
+        end
+        
+        local podium = animalPodiums:FindFirstChild(tostring(i))
+        if podium then
+            local base = podium:FindFirstChild("Base")
+            if base then
+                local spawn = base:FindFirstChild("Spawn")
+                if spawn then
+                    local spawnZ = spawn.Position.Z
+                    
+                    local targetZ = nil
+                    for _, pair in ipairs(zCoordinatePairs) do
+                        local dist1 = math.abs(spawnZ - pair[1])
+                        local dist2 = math.abs(spawnZ - pair[2])
+                        
+                        if dist1 < 10 or dist2 < 10 then
+                            if math.abs(playerPosition.Z - pair[1]) < math.abs(playerPosition.Z - pair[2]) then
+                                targetZ = pair[1]
+                            else
+                                targetZ = pair[2]
+                            end
+                            break
+                        end
+                    end
+                    
+                    local targetPosition
+                    if targetZ then
+                        targetPosition = Vector3.new(
+                            spawn.Position.X,
+                            spawn.Position.Y - 4,
+                            targetZ
+                        )
+                    else
+                        targetPosition = Vector3.new(
+                            spawn.Position.X,
+                            spawn.Position.Y - 4,
+                            spawn.Position.Z
+                        )
+                    end
+                    
+                    local distance = (playerPosition - targetPosition).Magnitude
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        nearestSpawn = targetPosition
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestSpawn
 end
 
-local function SetupPlotTimer(plot)
-	if not plot then
-		return
-	end
-
-	-- Очищаем старые соединения для этого plot'а
-	if ESP.TimerESP.PlotConnections[plot] then
-		ESP.TimerESP.PlotConnections[plot]:Disconnect()
-		ESP.TimerESP.PlotConnections[plot] = nil
-	end
-
-	local function setupTimer()
-		local Purchases = plot:FindFirstChild('Purchases')
-		if not Purchases then
-			return false
-		end
-
-		local Plotblock = Purchases:FindFirstChild('PlotBlock')
-		if not Plotblock then
-			return false
-		end
-
-		local main = Plotblock:FindFirstChild('Main')
-		local hitbox = plot:FindFirstChild('StealHitbox')
-		if not main or not hitbox then
-			return false
-		end
-
-		local billboardgui = main:FindFirstChild('BillboardGui')
-		if not billboardgui then
-			return false
-		end
-
-		local remainingTime = billboardgui:FindFirstChild('RemainingTime')
-		if not remainingTime then
-			return false
-		end
-
-		if ESP.TimerESP.Enabled then
-			CreateTimerDisplay(hitbox, remainingTime, plot)
-			return true
-		end
-		return false
-	end
-
-	-- Пытаемся настроить таймер сразу
-	local success = setupTimer()
-	
-	-- Если не получилось сразу, ждем пока появятся необходимые части
-	if not success then
-		ESP.TimerESP.PlotConnections[plot] = plot.ChildAdded:Connect(function(child)
-			if child.Name == 'Purchases' then
-				task.wait(1) -- Даем время для полной загрузки
-				setupTimer()
-			end
-		end)
-		
-		-- Также проверяем через некоторое время
-		task_spawn(function()
-			for i = 1, 5 do -- Пробуем 5 раз с интервалом в 1 секунду
-				task_wait(1)
-				if setupTimer() then
-					break
-				end
-			end
-		end)
-	else
-		-- Если таймер успешно создан, отслеживаем изменения в структуре plot'а
-		ESP.TimerESP.PlotConnections[plot] = plot.ChildAdded:Connect(function(child)
-			if child.Name == 'AnimalPodiums' then
-				-- При изменении количества питомцев пересоздаем таймер
-				task_wait(0.5)
-				setupTimer()
-			end
-		end)
-	end
+local function smoothFlyToTarget(targetPosition)
+    local character = player.Character
+    if not character or not character.PrimaryPart then return false end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    -- Сохраняем исходные состояния
+    originalAnchoredState = character.PrimaryPart.Anchored
+    originalPlatformStand = humanoid.PlatformStand
+    
+    -- Включаем PlatformStand только когда начинаем полет
+    humanoid.PlatformStand = true
+    isFloating = true
+    
+    local startPosition = character.PrimaryPart.Position
+    local startTime = tick()
+    local duration = 1.5
+    
+    statusLabel.Text = "Статус: Подъем..."
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        local elapsed = tick() - startTime
+        local alpha = math.min(elapsed / duration, 1)
+        local smoothAlpha = 1 - (1 - alpha) * (1 - alpha)
+        
+        local distanceToTarget = (targetPosition - character.PrimaryPart.Position).Magnitude
+        
+        -- Если достигли цели, устанавливаем Anchored и завершаем полет
+        if distanceToTarget <= 3 then
+            connection:Disconnect()
+            statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
+            
+            if floatConnection then floatConnection:Disconnect() end
+            
+            -- Устанавливаем Anchored только когда прилетели
+            character.PrimaryPart.Anchored = true
+            character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+            character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+            
+            floatConnection = RunService.Heartbeat:Connect(function()
+                if not character or not character.PrimaryPart or not isFloating then
+                    if floatConnection then floatConnection:Disconnect() end
+                    return
+                end
+                -- Поддерживаем Anchored состояние
+                character.PrimaryPart.Anchored = true
+                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+            end)
+            
+            table.insert(currentConnections, floatConnection)
+            return
+        end
+        
+        -- Продолжаем движение к цели (Anchored = false во время полета)
+        character.PrimaryPart.Anchored = false
+        
+        local newPosition = startPosition:Lerp(targetPosition, smoothAlpha)
+        
+        -- Используем Velocity для более плавного движения
+        local direction = (targetPosition - character.PrimaryPart.Position).Unit
+        local speed = math.min(distanceToTarget * 5, 50) -- Динамическая скорость
+        
+        character.PrimaryPart.Velocity = direction * speed
+        
+        if alpha >= 1 then
+            connection:Disconnect()
+            statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
+            
+            if floatConnection then floatConnection:Disconnect() end
+            
+            -- Устанавливаем Anchored только когда прилетели
+            character.PrimaryPart.Anchored = true
+            character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+            character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+            
+            floatConnection = RunService.Heartbeat:Connect(function()
+                if not character or not character.PrimaryPart or not isFloating then
+                    if floatConnection then floatConnection:Disconnect() end
+                    return
+                end
+                character.PrimaryPart.Anchored = true
+                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+            end)
+            
+            table.insert(currentConnections, floatConnection)
+        end
+    end)
+    
+    table.insert(currentConnections, connection)
+    return true
 end
 
-local function InitializeTimerESP()
-	-- Очищаем все существующие таймеры и соединения
-	for hitbox, timerData in pairs(ESP.TimerESP.ActiveTimers) do
-		CleanupTimerData(timerData)
-	end
-	ESP.TimerESP.ActiveTimers = {}
-	
-	for plot, connection in pairs(ESP.TimerESP.PlotConnections) do
-		if connection.Connected then
-			connection:Disconnect()
-		end
-	end
-	ESP.TimerESP.PlotConnections = {}
-
-	local Plots = Workspace:FindFirstChild('Plots')
-	if Plots then
-		-- Создаем таймеры для всех существующих plot'ов
-		for _, plot in pairs(Plots:GetChildren()) do
-			task_spawn(function()
-				SetupPlotTimer(plot)
-			end)
-		end
-
-		-- Обработка новых plot'ов
-		Plots.ChildAdded:Connect(function(plot)
-			task_wait(1) -- Даем время для инициализации
-			SetupPlotTimer(plot)
-		end)
-
-		-- Обработка удаления plot'ов
-		Plots.ChildRemoved:Connect(function(plot)
-			-- Находим и очищаем все таймеры связанные с этим plot'ом
-			for hitbox, timerData in pairs(ESP.TimerESP.ActiveTimers) do
-				if timerData.Plot == plot then
-					CleanupTimerData(timerData)
-					ESP.TimerESP.ActiveTimers[hitbox] = nil
-				end
-			end
-			
-			-- Очищаем соединения для этого plot'а
-			if ESP.TimerESP.PlotConnections[plot] then
-				ESP.TimerESP.PlotConnections[plot]:Disconnect()
-				ESP.TimerESP.PlotConnections[plot] = nil
-			end
-		end)
-	end
+local function deactivateFlightMode()
+    isFloating = false
+    if floatConnection then floatConnection:Disconnect() end
+    
+    -- Восстанавливаем прозрачность и CanCollide для plot
+    restorePlotTransparency()
+    
+    local character = player.Character
+    if character and character.PrimaryPart then
+        -- Восстанавливаем исходное состояние Anchored
+        character.PrimaryPart.Anchored = originalAnchoredState
+        
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then 
+            humanoid.PlatformStand = originalPlatformStand or false
+        end
+        
+        -- Сбрасываем Velocity для нормального падения
+        if not character.PrimaryPart.Anchored then
+            character.PrimaryPart.Velocity = Vector3.new(0, -10, 0)
+        end
+        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+    end
+    
+    for _, connection in ipairs(currentConnections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    currentConnections = {}
+    
+    isActive = false
+    currentPlot = nil
+    statusLabel.Text = "Статус: Ожидание"
+    return true
 end
 
--- ==================== NAME TAGS ====================
-
-local function CalculateBackgroundWidth(text)
-	local textSize = TextService:GetTextSize(
-		text,
-		14,
-		Enum.Font.GothamBold,
-		Vector2.new(1000, 22)
-	)
-	return math.max(60, textSize.X + 20)
+local function activateFlightToSpawn()
+    if not flightEnabled then return false end
+    
+    currentPlot = findNearestPlot()
+    if not currentPlot then
+        statusLabel.Text = "Статус: Plot не найден"
+        return false
+    end
+    
+    -- Устанавливаем прозрачность и отключаем CanCollide для plot
+    setPlotTransparency(0.5)
+    
+    local nearestSpawn = findNearestSpawn()
+    if nearestSpawn then
+        smoothFlyToTarget(nearestSpawn)
+    else
+        statusLabel.Text = "Статус: Spawn не найден"
+        restorePlotTransparency()
+        return false
+    end
+    
+    isActive = true
+    return true
 end
 
-local function GetDisplayName(player)
-	return player.DisplayName
+local function disableScript()
+    scriptActive = false
+    flightEnabled = false
+    deactivateFlightMode()
+    screenGui:Destroy()
 end
 
-local function UpdateNameTag(nameTag, player)
-	if
-		not nameTag
-		or not nameTag:FindFirstChild('Background')
-		or not nameTag:FindFirstChild('Name')
-	then
-		return
-	end
-
-	local nameLabel = nameTag.Name
-	local displayName = GetDisplayName(player)
-
-	nameLabel.Text = displayName
-end
-
-local function RemovePlayerNameTag(player)
-	if ESP.NameTags.ActiveNameTags[player] then
-		local tagData = ESP.NameTags.ActiveNameTags[player]
-		if tagData.Billboard then
-			tagData.Billboard:Destroy()
-		end
-		if tagData.Part then
-			tagData.Part:Destroy()
-		end
-		if tagData.Connection then
-			tagData.Connection:Disconnect()
-		end
-		if tagData.HealthConnection then
-			tagData.HealthConnection:Disconnect()
-		end
-		if tagData.CharacterConnection then
-			tagData.CharacterConnection:Disconnect()
-		end
-		ESP.NameTags.ActiveNameTags[player] = nil
-	end
-
-	if ESP.NameTags.Connections[player] then
-		ESP.NameTags.Connections[player]:Disconnect()
-		ESP.NameTags.Connections[player] = nil
-	end
-end
-
-local function CreateNameTag(player)
-	-- Удаляем старый NameTag если есть
-	RemovePlayerNameTag(player)
-
-	if not player.Character then
-		-- Если персонажа нет, ждем его появления
-		local characterAddedConnection
-		characterAddedConnection = player.CharacterAdded:Connect(
-			function(character)
-				characterAddedConnection:Disconnect()
-				task_wait(1) -- Ждем полной загрузки персонажа
-				CreateNameTag(player)
-			end
-		)
-		return
-	end
-
-	local humanoidRootPart = player.Character:FindFirstChild('HumanoidRootPart')
-	local humanoid = player.Character:FindFirstChild('Humanoid')
-
-	if not humanoidRootPart or not humanoid then
-		-- Если нет нужных частей, пробуем снова через секунду
-		task_spawn(function()
-			task_wait(1)
-			if player.Character then
-				CreateNameTag(player)
-			end
-		end)
-		return
-	end
-
-	local displayName = GetDisplayName(player)
-	local width = CalculateBackgroundWidth(displayName)
-
-	local nameTagPart = Instance.new('Part')
-	nameTagPart.Name = 'NameTagPart'
-	nameTagPart.Size = Vector3.new(2, 0.5, 0.5)
-	nameTagPart.Transparency = 1
-	nameTagPart.CanCollide = false
-	nameTagPart.Anchored = true
-	nameTagPart.Parent = workspace
-
-	local billboard = Instance.new('BillboardGui')
-	billboard.Name = 'Nametag_' .. player.Name
-	billboard.Adornee = nameTagPart
-	billboard.Size = UDim2.new(0, width, 0, 18)
-	billboard.StudsOffset = Vector3.new(0, 0, 0)
-	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 500
-	billboard.Parent = nameTagPart
-
-	local background = Instance.new('Frame')
-	background.Name = 'Background'
-	background.Size = UDim2.new(0, width, 0, 18)
-	background.Position = UDim2.new(0.5, -width / 2, 0, 0)
-	background.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	background.BackgroundTransparency = 0.25
-	background.BorderSizePixel = 0
-
-	local corner = Instance.new('UICorner')
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = background
-	background.Parent = billboard
-
-	local nameLabel = Instance.new('TextLabel')
-	nameLabel.Name = 'Name'
-	nameLabel.Size = UDim2.new(1, -12, 1, 0)
-	nameLabel.Position = UDim2.new(0, 6, 0, 0)
-	nameLabel.Text = displayName
-	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 14
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-	nameLabel.TextStrokeTransparency = 0.3
-	nameLabel.Parent = billboard
-
-	-- Функция для обновления позиции NameTag
-	local function updateNameTagPosition()
-		if
-			player.Character
-			and humanoidRootPart
-			and humanoid
-			and humanoid.Health > 0
-		then
-			-- Игрок жив - показываем NameTag над головой
-			nameTagPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, 5, 0)
-		else
-			-- Игрок умер или персонаж уничтожен - скрываем NameTag
-			if nameTagPart then
-				nameTagPart.CFrame = CFrame.new(0, -1000, 0) -- Прячем далеко под карту
-			end
-		end
-	end
-
-	-- Соединение для обновления позиции
-	local connection = heartbeat:Connect(updateNameTagPosition)
-
-	-- Соединение для отслеживания смерти игрока
-	local healthConnection = humanoid.HealthChanged:Connect(function()
-		if humanoid.Health <= 0 then
-			-- Игрок умер, скрываем NameTag
-			if nameTagPart then
-				nameTagPart.CFrame = CFrame.new(0, -1000, 0)
-			end
-		else
-			-- Игрок ожил, возвращаем NameTag
-			if nameTagPart and humanoidRootPart then
-				nameTagPart.CFrame = humanoidRootPart.CFrame
-					* CFrame.new(0, 5, 0)
-			end
-		end
-	end)
-
-	-- Соединение для отслеживания уничтожения персонажа
-	local characterConnection = player.CharacterRemoving:Connect(function()
-		RemovePlayerNameTag(player)
-	end)
-
-	-- Соединение для respawn (новый персонаж)
-	local respawnConnection = player.CharacterAdded:Connect(function(character)
-		-- Удаляем старый NameTag и создаем новый для нового персонажа
-		task_spawn(function()
-			task_wait(1) -- Ждем полной загрузки нового персонажа
-			RemovePlayerNameTag(player)
-			if ESP.NameTags.Enabled then
-				CreateNameTag(player)
-			end
-		end)
-	end)
-
-	ESP.NameTags.ActiveNameTags[player] = {
-		Billboard = billboard,
-		Part = nameTagPart,
-		Connection = connection,
-		HealthConnection = healthConnection,
-		CharacterConnection = characterConnection,
-		RespawnConnection = respawnConnection,
-	}
-
-	-- Инициализируем позицию
-	updateNameTagPosition()
-
-	-- Соединение для обновления DisplayName
-	if not ESP.NameTags.Connections[player] then
-		ESP.NameTags.Connections[player] = player
-			:GetPropertyChangedSignal('DisplayName')
-			:Connect(function()
-				if
-					ESP.NameTags.Enabled
-					and ESP.NameTags.ActiveNameTags[player]
-				then
-					UpdateNameTag(billboard, player)
-				end
-			end)
-	end
-end
-
-local function ToggleNameTags(state)
-	ESP.NameTags.Enabled = state
-
-	if state then
-		-- Создаем NameTags для всех существующих игроков
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player ~= localPlayer then
-				if not ESP.NameTags.Connections[player] then
-					-- Основное соединение для новых персонажей
-					ESP.NameTags.Connections[player] = player.CharacterAdded:Connect(
-						function(character)
-							task_wait(1)
-							if ESP.NameTags.Enabled then
-								CreateNameTag(player)
-							end
-						end
-					)
-				end
-				-- Создаем NameTag если персонаж уже есть
-				if player.Character then
-					CreateNameTag(player)
-				end
-			end
-		end
-
-		-- Обработка новых игроков
-		Players.PlayerAdded:Connect(function(player)
-			if player ~= localPlayer then
-				if not ESP.NameTags.Connections[player] then
-					ESP.NameTags.Connections[player] = player.CharacterAdded:Connect(
-						function(character)
-							task_wait(1)
-							if ESP.NameTags.Enabled then
-								CreateNameTag(player)
-							end
-						end
-					)
-				end
-				-- Создаем NameTag если персонаж уже есть
-				if player.Character then
-					CreateNameTag(player)
-				end
-			end
-		end)
-	else
-		-- Выключаем все NameTags
-		for player, tagData in pairs(ESP.NameTags.ActiveNameTags) do
-			RemovePlayerNameTag(player)
-		end
-		ESP.NameTags.ActiveNameTags = {}
-	end
-end
-
--- ==================== WALL HACK ====================
-
-local function createHighlight(character, player)
-	if ESP.WallHack.Highlights[player] then
-		ESP.WallHack.Highlights[player]:Destroy()
-	end
-
-	local highlight = Instance.new('Highlight')
-	highlight.Name = 'Highlight'
-	highlight.Adornee = character
-	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	highlight.FillColor = ESP.WallHack.FillColor
-	highlight.FillTransparency = ESP.WallHack.FillTransparency
-	highlight.OutlineColor = ESP.WallHack.OutlineColor
-	highlight.OutlineTransparency = ESP.WallHack.OutlineTransparency
-	highlight.Parent = character
-
-	ESP.WallHack.Highlights[player] = highlight
-	return highlight
-end
-
-local function onPlayerAdded(player)
-	if player == localPlayer then
-		return
-	end
-
-	player.CharacterAdded:Connect(function(character)
-		if ESP.WallHack.Enabled then
-			createHighlight(character, player)
-		end
-	end)
-
-	if player.Character and ESP.WallHack.Enabled then
-		createHighlight(player.Character, player)
-	end
-end
-
-local function onPlayerRemoving(player)
-	if ESP.WallHack.Highlights[player] then
-		ESP.WallHack.Highlights[player]:Destroy()
-		ESP.WallHack.Highlights[player] = nil
-	end
-	RemovePlayerNameTag(player)
-end
-
-local function ToggleWallHack(state)
-	ESP.WallHack.Enabled = state
-
-	if state then
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player ~= localPlayer then
-				onPlayerAdded(player)
-			end
-		end
-	else
-		for player, highlight in pairs(ESP.WallHack.Highlights) do
-			if highlight then
-				highlight:Destroy()
-			end
-		end
-		ESP.WallHack.Highlights = {}
-	end
-end
-
---- ==================== PET DISPLAY ====================
-
-local function generateLightColor()
-	return Color3.fromRGB(
-		math.random(160, 255),
-		math.random(160, 255),
-		math.random(160, 255)
-	)
-end
-
-local function formatSalaryText(value)
-	if not value then
-		return '0/S'
-	end
-	value = tonumber(value) or 0
-
-	if value >= 1000000 then
-		return string_format('%.1fM/s', value / 1000000)
-	elseif value >= 1000 then
-		return string_format('%.1fK/s', value / 1000)
-	else
-		return string_format('%d/s', math_floor(value))
-	end
-end
-
-local function parseSalaryValue(text)
-	if not text then
-		return 0
-	end
-	text = string_upper(text):gsub('%s+', ''):gsub(',', '')
-	local numberPart = text:gsub('[^%d%.]', '')
-	local number = tonumber(numberPart) or 0
-
-	if text:find('M/S') then
-		return number * 1000000
-	elseif text:find('K/S') then
-		return number * 1000
-	else
-		return number
-	end
-end
-
-local function clearPetBillboards()
-	if ESP.PetDisplay.currentBillboard then
-		if ESP.PetDisplay.currentBillboard.Billboard then
-			ESP.PetDisplay.currentBillboard.Billboard:Destroy()
-		end
-		if ESP.PetDisplay.currentBillboard.Connection then
-			ESP.PetDisplay.currentBillboard.Connection:Disconnect()
-		end
-		ESP.PetDisplay.currentBillboard = nil
-	end
-	ESP.PetDisplay.currentTextOffset = ESP.PetDisplay.TEXT_OFFSET_NEAR
-end
-
-local function findMostValuablePet()
-	local bestValue = 0
-	local bestSpawn, bestName, bestSalary = nil, '', ''
-
-	local Plots = Workspace:FindFirstChild('Plots')
-	if not Plots then
-		return nil, '', '', 0
-	end
-
-	for _, plotInstance in ipairs(Plots:GetChildren()) do
-		if
-			not plotInstance:FindFirstChild('PlotSign')
-			or not plotInstance:FindFirstChild('AnimalPodiums')
-		then
-			continue
-		end
-
-		local isPlayerPlot = plotInstance.PlotSign:FindFirstChild('YourBase')
-			and plotInstance.PlotSign.YourBase.Enabled
-		if not isPlayerPlot then
-			for _, podium in ipairs(plotInstance.AnimalPodiums:GetChildren()) do
-				if
-					not podium:FindFirstChild('Base')
-					or not podium.Base:FindFirstChild('Spawn')
-				then
-					continue
-				end
-
-				local spawn = podium.Base.Spawn
-				if not spawn:FindFirstChild('Attachment') then
-					continue
-				end
-
-				local overhead =
-					spawn.Attachment:FindFirstChild('AnimalOverhead')
-				if
-					overhead
-					and overhead:FindFirstChild('Generation')
-					and overhead:FindFirstChild('DisplayName')
-				then
-					local salaryText = overhead.Generation.Text
-					local value = parseSalaryValue(salaryText)
-
-					if value > bestValue then
-						bestValue = value
-						bestSpawn = spawn
-						bestName = overhead.DisplayName.Text
-						bestSalary = salaryText
-					end
-				end
-			end
-		end
-	end
-
-	return bestSpawn, bestName, bestSalary, bestValue
-end
-
-local function calculateTextOffset(distance)
-	local normalizedDistance =
-		math_clamp(distance / ESP.PetDisplay.MAX_DISTANCE, 0, 1)
-	return ESP.PetDisplay.TEXT_OFFSET_NEAR
-		+ (ESP.PetDisplay.TEXT_OFFSET_FAR - ESP.PetDisplay.TEXT_OFFSET_NEAR)
-			* normalizedDistance
-end
-
-local function createPetBillboard(spawn, name, salaryText)
-	-- Всегда очищаем старый Billboard перед созданием нового
-	clearPetBillboards()
-
-	if not spawn or not ESP.PetDisplay.Enabled then
-		return
-	end
-
-	-- Проверяем, существует ли еще spawn и его родители
-	if not spawn:IsDescendantOf(Workspace) then
-		return
-	end
-
-	if ESP.PetDisplay.AUTO_COLOR then
-		ESP.PetDisplay.currentColor = generateLightColor()
-	end
-
-	local billboard = Instance.new('BillboardGui')
-	billboard.Name = 'PetDisplay'
-	billboard.Adornee = spawn
-	billboard.AlwaysOnTop = true
-	billboard.Size = UDim2.new(12, 0, 4, 0)
-	billboard.StudsOffset = Vector3.new(0, ESP.PetDisplay.currentTextOffset, 0)
-	billboard.MaxDistance = ESP.PetDisplay.MAX_DISTANCE
-	billboard.Parent = spawn
-
-	local textLabel = Instance.new('TextLabel')
-	textLabel.Size = UDim2.new(1, 0, 1, 0)
-	textLabel.Text = name
-		.. '\n'
-		.. formatSalaryText(parseSalaryValue(salaryText))
-	textLabel.TextColor3 = ESP.PetDisplay.currentColor
-	textLabel.TextStrokeColor3 = ESP.PetDisplay.TEXT_STROKE_COLOR
-	textLabel.TextStrokeTransparency = ESP.PetDisplay.TEXT_STROKE_TRANSPARENCY
-	textLabel.BackgroundTransparency = 1
-	textLabel.TextSize = ESP.PetDisplay.TEXT_SIZE
-	textLabel.Font = ESP.PetDisplay.FONT
-	textLabel.TextScaled = false
-	textLabel.TextYAlignment = Enum.TextYAlignment.Center
-	textLabel.TextXAlignment = Enum.TextXAlignment.Center
-	textLabel.LineHeight = 0.8
-	textLabel.FontFace = Font.new(
-		'rbxasset://fonts/families/SourceSans.json',
-		ESP.PetDisplay.FONT_WEIGHT,
-		Enum.FontStyle.Normal
-	)
-	textLabel.Parent = billboard
-
-	local lastUpdate = os.clock()
-	local connection = heartbeat:Connect(function()
-		local currentTime = os.clock()
-		local deltaTime = currentTime - lastUpdate
-		lastUpdate = currentTime
-
-		-- Проверяем, существует ли еще объект
-		if
-			not spawn
-			or not spawn.Parent
-			or not billboard
-			or not billboard.Parent
-		then
-			connection:Disconnect()
-			if billboard then
-				billboard:Destroy()
-			end
-			ESP.PetDisplay.currentBillboard = nil
-			return
-		end
-
-		local camera = Workspace.CurrentCamera
-		if camera then
-			local distance = (spawn.Position - camera.CFrame.Position).Magnitude
-			local targetOffset = calculateTextOffset(distance)
-
-			ESP.PetDisplay.currentTextOffset = ESP.PetDisplay.currentTextOffset
-				+ (targetOffset - ESP.PetDisplay.currentTextOffset)
-					* math.min(deltaTime * 8, 1)
-
-			billboard.StudsOffset =
-				Vector3.new(0, ESP.PetDisplay.currentTextOffset, 0)
-		end
-	end)
-
-	ESP.PetDisplay.currentBillboard = {
-		Billboard = billboard,
-		Connection = connection,
-		Spawn = spawn,
-	}
-end
-
-local function petDisplayLoop()
-	while task_wait(ESP.PetDisplay.CHECK_INTERVAL) do
-		if not ESP.PetDisplay.Enabled then
-			clearPetBillboards()
-			ESP.PetDisplay.lastBestValue = 0
-			ESP.PetDisplay.lastBestName = ''
-			ESP.PetDisplay.lastBestSalary = ''
-			continue
-		end
-
-		local spawn, name, salary, value = findMostValuablePet()
-
-		-- Проверяем, изменился ли питомец или его данные
-		local shouldUpdate = false
-
-		if spawn then
-			-- Проверяем, это новый питомец или изменились данные
-			if
-				value ~= ESP.PetDisplay.lastBestValue
-				or name ~= ESP.PetDisplay.lastBestName
-				or salary ~= ESP.PetDisplay.lastBestSalary
-			then
-				shouldUpdate = true
-			end
-
-			-- Проверяем, не уничтожен ли текущий спавн
-			if
-				ESP.PetDisplay.currentBillboard
-				and ESP.PetDisplay.currentBillboard.Spawn ~= spawn
-			then
-				shouldUpdate = true
-			end
-		else
-			-- Если питомец пропал, очищаем
-			if ESP.PetDisplay.lastBestValue > 0 then
-				shouldUpdate = true
-			end
-		end
-
-		if shouldUpdate then
-			ESP.PetDisplay.lastBestValue = value
-			ESP.PetDisplay.lastBestName = name
-			ESP.PetDisplay.lastBestSalary = salary
-
-			if spawn then
-				createPetBillboard(spawn, name, salary)
-			else
-				clearPetBillboards()
-				ESP.PetDisplay.lastBestValue = 0
-				ESP.PetDisplay.lastBestName = ''
-				ESP.PetDisplay.lastBestSalary = ''
-			end
-		end
-	end
-end
-
-local function TogglePetDisplay(state)
-	ESP.PetDisplay.Enabled = state
-
-	if state then
-		-- Очищаем перед запуском
-		clearPetBillboards()
-		ESP.PetDisplay.lastBestValue = 0
-		ESP.PetDisplay.lastBestName = ''
-		ESP.PetDisplay.lastBestSalary = ''
-
-		task_spawn(petDisplayLoop)
-	else
-		clearPetBillboards()
-		ESP.PetDisplay.lastBestValue = 0
-		ESP.PetDisplay.lastBestName = ''
-		ESP.PetDisplay.lastBestSalary = ''
-	end
-end
-
--- ==================== ОБЩИЕ ФУНКЦИИ ====================
-
-function ToggleAllESP(state)
-	ESP.TimerESP.Enabled = state
-	ESP.NameTags.Enabled = state
-	ESP.WallHack.Enabled = state
-	ESP.PetDisplay.Enabled = state
-
-	if state then
-		InitializeTimerESP()
-		ToggleNameTags(true)
-		ToggleWallHack(true)
-		TogglePetDisplay(true)
-	else
-		-- Очищаем все таймеры
-		for hitbox, timerData in pairs(ESP.TimerESP.ActiveTimers) do
-			CleanupTimerData(timerData)
-		end
-		ESP.TimerESP.ActiveTimers = {}
-		
-		-- Очищаем соединения plot'ов
-		for plot, connection in pairs(ESP.TimerESP.PlotConnections) do
-			if connection.Connected then
-				connection:Disconnect()
-			end
-		end
-		ESP.TimerESP.PlotConnections = {}
-
-		-- Очищаем все NameTags
-		for player, tagData in pairs(ESP.NameTags.ActiveNameTags) do
-			RemovePlayerNameTag(player)
-		end
-		ESP.NameTags.ActiveNameTags = {}
-
-		-- Очищаем все подсветки
-		for player, highlight in pairs(ESP.WallHack.Highlights) do
-			if highlight then
-				highlight:Destroy()
-			end
-		end
-		ESP.WallHack.Highlights = {}
-
-		-- Очищаем Pet Display
-		clearPetBillboards()
-		ESP.PetDisplay.lastBestValue = 0
-		ESP.PetDisplay.lastBestName = ''
-		ESP.PetDisplay.lastBestSalary = ''
-	end
-end
-
--- ==================== ИНИЦИАЛИЗАЦИЯ ====================
-
--- Подключаем обработчики игроков
-Players.PlayerAdded:Connect(onPlayerAdded)
-Players.PlayerRemoving:Connect(onPlayerRemoving)
-
--- Автоматический запуск всех ESP
-task_spawn(function()
-	task_wait(2)
-	InitializeTimerESP()
-	ToggleNameTags(true)
-	ToggleWallHack(true)
-	TogglePetDisplay(true)
+-- Обработчики клавиш
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F2 then
+        disableScript()
+    elseif input.KeyCode == Enum.KeyCode.Down and scriptActive and flightEnabled then
+        if isActive then deactivateFlightMode() end
+    end
 end)
 
--- Обновление позиций для TimerESP
-heartbeat:Connect(function()
-	if not ESP.TimerESP.Enabled then
-		return
-	end
-
-	for hitbox, timerData in pairs(ESP.TimerESP.ActiveTimers) do
-		-- Проверяем, существуют ли все объекты
-		if not hitbox or not hitbox.Parent or not timerData.Plot or not timerData.Plot.Parent then
-			-- Объекты уничтожены, очищаем таймер
-			CleanupTimerData(timerData)
-			ESP.TimerESP.ActiveTimers[hitbox] = nil
-		elseif timerData.Part then
-			local plot = hitbox.Parent
-			local animalPodiums = plot:FindFirstChild('AnimalPodiums')
-			local podiumCount = animalPodiums and #animalPodiums:GetChildren() or 0
-			local newYOffset = CalculateYOffset(podiumCount)
-
-			if newYOffset ~= timerData.CurrentOffset then
-				timerData.CurrentOffset = newYOffset
-				timerData.Part.CFrame = hitbox.CFrame * CFrame.new(0, newYOffset, 0)
-			end
-		end
-	end
+-- Переключатель полета
+flightToggle.MouseButton1Click:Connect(function()
+    flightEnabled = not flightEnabled
+    if flightEnabled then
+        flightToggle.Text = "ВКЛ"
+        flightToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        statusLabel.Text = "Статус: Активация..."
+        
+        wait(0.1)
+        if not isActive then
+            activateFlightToSpawn()
+        end
+    else
+        flightToggle.Text = "ВЫКЛ"
+        flightToggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+        deactivateFlightMode()
+    end
 end)
-
--- Очистка при выходе игрока
-Players.PlayerRemoving:Connect(function(player)
-	if player == localPlayer then
-		clearPetBillboards()
-		ESP.PetDisplay.lastBestValue = 0
-		ESP.PetDisplay.lastBestName = ''
-		ESP.PetDisplay.lastBestSalary = ''
-	else
-		RemovePlayerNameTag(player)
-	end
-end)
-
--- Экспортируем функции управления
-return {
-	ToggleAll = ToggleAllESP,
-	ToggleTimers = function(state)
-		ESP.TimerESP.Enabled = state
-		if state then
-			InitializeTimerESP()
-		else
-			for hitbox, timerData in pairs(ESP.TimerESP.ActiveTimers) do
-				CleanupTimerData(timerData)
-			end
-			ESP.TimerESP.ActiveTimers = {}
-		end
-	end,
-	ToggleNameTags = ToggleNameTags,
-	ToggleWallHack = ToggleWallHack,
-	TogglePetDisplay = TogglePetDisplay,
-}
