@@ -276,10 +276,6 @@ local function smoothFlyToTarget(targetPosition)
     -- НЕ включаем PlatformStand - чтобы анимации работали
     isFloating = true
     
-    local startPosition = character.PrimaryPart.Position
-    local startTime = tick()
-    local duration = 1.5 -- Уменьшил время полета
-    
     statusLabel.Text = "Статус: Полёт..."
     
     local connection
@@ -288,9 +284,6 @@ local function smoothFlyToTarget(targetPosition)
             connection:Disconnect()
             return
         end
-        
-        local elapsed = tick() - startTime
-        local alpha = math.min(elapsed / duration, 1)
         
         local currentPosition = character.PrimaryPart.Position
         local distanceToTarget = (targetPosition - currentPosition).Magnitude
@@ -308,30 +301,38 @@ local function smoothFlyToTarget(targetPosition)
             return
         end
         
-        -- Вычисляем направление к цели
+        -- Умное вычисление скорости
         local direction = (targetPosition - currentPosition).Unit
+        local speed
         
-        -- Более агрессивное движение - летим прямо к цели
-        local speed = math.min(distanceToTarget * 1, 100) -- Увеличил скорость
+        if distanceToTarget > 50 then
+            -- Максимальная скорость для больших расстояний
+            speed = 120
+        elseif distanceToTarget > 20 then
+            -- Средняя скорость
+            speed = 80
+        elseif distanceToTarget > 10 then
+            -- Замедление при приближении
+            speed = distanceToTarget * 4
+        else
+            -- Точное позиционирование
+            speed = distanceToTarget * 3
+        end
         
-        -- Применяем Velocity прямо к цели
+        -- Применяем скорость
         character.PrimaryPart.Velocity = direction * speed
         
-        -- Небольшая корректировка для точности приземления
-        if distanceToTarget < 10 then
-            -- Замедляемся при приближении к цели
-            character.PrimaryPart.Velocity = direction * (distanceToTarget * 2)
+        -- Корректировка высоты
+        local heightDiff = targetPosition.Y - currentPosition.Y
+        if math.abs(heightDiff) > 1 then
+            character.PrimaryPart.Velocity = Vector3.new(
+                character.PrimaryPart.Velocity.X,
+                heightDiff * 5,
+                character.PrimaryPart.Velocity.Z
+            )
         end
         
-        if alpha >= 1 then
-            connection:Disconnect()
-            statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
-            
-            -- Устанавливаем Anchored только когда прилетели
-            character.PrimaryPart.Anchored = true
-            character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-            character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-        end
+        statusLabel.Text = string.format("Статус: Полёт... (%.1m)", distanceToTarget)
     end)
     
     table.insert(currentConnections, connection)
