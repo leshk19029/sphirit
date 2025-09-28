@@ -1,69 +1,398 @@
--- Упрощенная версия меню Job ID для Roblox
+-- Job ID Menu by Bind - Roblox
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
+-- Настройки
+local OPEN_BIND = Enum.KeyCode.F2 -- Клавиша для открытия меню (можно поменять)
+local DEBUG_MODE = true -- Режим отладки
+
 -- Создание GUI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SimpleJobIDMenu"
+ScreenGui.Name = "JobIDMenuByBind"
 ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
 
+-- Основной фрейм меню (изначально скрыт)
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 150)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
-MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 400, 0, 250)
+MainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
+-- Скругление углов
 local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.CornerRadius = UDim.new(0, 12)
 UICorner.Parent = MainFrame
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Title.Text = "Введите Job ID"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 18
-Title.Font = Enum.Font.GothamBold
-Title.Parent = MainFrame
+-- Тень/обводка
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(80, 80, 90)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+-- Заголовок
+local TitleFrame = Instance.new("Frame")
+TitleFrame.Name = "TitleFrame"
+TitleFrame.Size = UDim2.new(1, 0, 0, 50)
+TitleFrame.Position = UDim2.new(0, 0, 0, 0)
+TitleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+TitleFrame.BorderSizePixel = 0
+TitleFrame.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = TitleFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "🎯 ВВЕДИТЕ JOB ID"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 20
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleFrame
+
+-- Кнопка закрытия
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -40, 0, 10)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = TitleFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 15)
+CloseCorner.Parent = CloseButton
+
+-- Поле ввода
+local InputContainer = Instance.new("Frame")
+InputContainer.Name = "InputContainer"
+InputContainer.Size = UDim2.new(0, 360, 0, 50)
+InputContainer.Position = UDim2.new(0.5, -180, 0.3, -25)
+InputContainer.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+InputContainer.BorderSizePixel = 0
+InputContainer.Parent = MainFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 8)
+InputCorner.Parent = InputContainer
 
 local TextBox = Instance.new("TextBox")
-TextBox.Size = UDim2.new(0.8, 0, 0, 30)
-TextBox.Position = UDim2.new(0.1, 0, 0.3, 0)
-TextBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+TextBox.Name = "JobIdTextBox"
+TextBox.Size = UDim2.new(1, -20, 1, -10)
+TextBox.Position = UDim2.new(0, 10, 0, 5)
+TextBox.BackgroundTransparency = 1
 TextBox.Text = ""
-TextBox.PlaceholderText = "Job ID..."
+TextBox.PlaceholderText = "Введите цифровой Job ID..."
+TextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
 TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 TextBox.TextSize = 16
-TextBox.Parent = MainFrame
+TextBox.Font = Enum.Font.Gotham
+TextBox.TextXAlignment = Enum.TextXAlignment.Left
+TextBox.ClearTextOnFocus = false
+TextBox.Parent = InputContainer
 
-local SubmitBtn = Instance.new("TextButton")
-SubmitBtn.Size = UDim2.new(0.6, 0, 0, 30)
-SubmitBtn.Position = UDim2.new(0.2, 0, 0.7, 0)
-SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-SubmitBtn.Text = "Отправить"
-SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SubmitBtn.TextSize = 14
-SubmitBtn.Parent = MainFrame
+-- Кнопка отправки
+local SubmitButton = Instance.new("TextButton")
+SubmitButton.Name = "SubmitButton"
+SubmitButton.Size = UDim2.new(0, 140, 0, 40)
+SubmitButton.Position = UDim2.new(0.5, -70, 0.7, -20)
+SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+SubmitButton.Text = "🚀 ОТПРАВИТЬ"
+SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitButton.TextSize = 14
+SubmitButton.Font = Enum.Font.GothamBold
+SubmitButton.Parent = MainFrame
 
--- Функции
-SubmitBtn.MouseButton1Click:Connect(function()
-    local jobId = TextBox.Text:gsub("%s+", "")
+local SubmitCorner = Instance.new("UICorner")
+SubmitCorner.CornerRadius = UDim.new(0, 8)
+SubmitCorner.Parent = SubmitButton
+
+-- Индикатор загрузки
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Name = "LoadingFrame"
+LoadingFrame.Size = UDim2.new(1, -40, 0, 3)
+LoadingFrame.Position = UDim2.new(0, 20, 1, -5)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+LoadingFrame.BorderSizePixel = 0
+LoadingFrame.Visible = false
+LoadingFrame.Parent = MainFrame
+
+local LoadingBar = Instance.new("Frame")
+LoadingBar.Name = "LoadingBar"
+LoadingBar.Size = UDim2.new(0, 0, 1, 0)
+LoadingBar.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+LoadingBar.BorderSizePixel = 0
+LoadingBar.Parent = LoadingFrame
+
+-- Фрейм для уведомлений
+local NotificationFrame = Instance.new("Frame")
+NotificationFrame.Name = "NotificationFrame"
+NotificationFrame.Size = UDim2.new(1, -40, 0, 40)
+NotificationFrame.Position = UDim2.new(0, 20, 0, 160)
+NotificationFrame.BackgroundTransparency = 1
+NotificationFrame.Visible = false
+NotificationFrame.Parent = MainFrame
+
+local NotificationLabel = Instance.new("TextLabel")
+NotificationLabel.Name = "NotificationLabel"
+NotificationLabel.Size = UDim2.new(1, 0, 1, 0)
+NotificationLabel.BackgroundTransparency = 1
+NotificationLabel.Text = ""
+NotificationLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+NotificationLabel.TextSize = 14
+NotificationLabel.Font = Enum.Font.Gotham
+NotificationLabel.TextWrapped = true
+NotificationLabel.Parent = NotificationFrame
+
+-- Индикатор бинда в углу экрана
+local BindIndicator = Instance.new("TextLabel")
+BindIndicator.Name = "BindIndicator"
+BindIndicator.Size = UDim2.new(0, 200, 0, 30)
+BindIndicator.Position = UDim2.new(1, -210, 1, -40)
+BindIndicator.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+BindIndicator.BackgroundTransparency = 0.8
+BindIndicator.Text = "Job Menu: " .. OPEN_BIND.Name
+BindIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
+BindIndicator.TextSize = 12
+BindIndicator.Font = Enum.Font.Gotham
+BindIndicator.TextXAlignment = Enum.TextXAlignment.Left
+BindIndicator.Parent = ScreenGui
+
+local BindIndicatorCorner = Instance.new("UICorner")
+BindIndicatorCorner.CornerRadius = UDim.new(0, 6)
+BindIndicatorCorner.Parent = BindIndicator
+
+local BindIndicatorPadding = Instance.new("UIPadding")
+BindIndicatorPadding.PaddingLeft = UDim.new(0, 10)
+BindIndicatorPadding.Parent = BindIndicator
+
+-- Переменные состояния
+local isMenuOpen = false
+local isProcessing = false
+
+-- Анимации
+local function TweenObject(object, properties, duration)
+    local tweenInfo = TweenInfo.new(
+        duration or 0.3,
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out
+    )
+    local tween = TweenService:Create(object, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
+-- Показать уведомление
+local function ShowNotification(message, isSuccess)
+    NotificationLabel.Text = message
     
-    if jobId ~= "" then
-        print("Job ID принят:", jobId)
-        -- Ваша логика обработки
+    if isSuccess then
+        NotificationLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    else
+        NotificationLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+    
+    NotificationFrame.Visible = true
+    
+    -- Автоскрытие через 3 секунды
+    delay(3, function()
+        if NotificationFrame then
+            NotificationFrame.Visible = false
+        end
+    end)
+end
+
+-- Анимация загрузки
+local function ShowLoading(duration)
+    LoadingFrame.Visible = true
+    LoadingBar.Size = UDim2.new(0, 0, 1, 0)
+    
+    TweenObject(LoadingBar, {Size = UDim2.new(1, 0, 1, 0)}, duration or 2)
+end
+
+local function HideLoading()
+    LoadingFrame.Visible = false
+end
+
+-- Открыть меню
+local function OpenMenu()
+    if isProcessing then return end
+    
+    isMenuOpen = true
+    MainFrame.Visible = true
+    MainFrame.BackgroundTransparency = 1
+    
+    -- Анимация появления
+    TweenObject(MainFrame, {BackgroundTransparency = 0}, 0.2)
+    
+    -- Фокус на поле ввода
+    wait(0.1)
+    if TextBox then
+        TextBox:CaptureFocus()
+    end
+    
+    if DEBUG_MODE then
+        print("📱 Меню открыто по бинду " .. OPEN_BIND.Name)
+    end
+end
+
+-- Закрыть меню
+local function CloseMenu()
+    isMenuOpen = false
+    
+    -- Анимация исчезновения
+    TweenObject(MainFrame, {BackgroundTransparency = 1}, 0.2)
+    
+    wait(0.2)
+    if MainFrame then
         MainFrame.Visible = false
+        TextBox.Text = ""
+        NotificationFrame.Visible = false
+        LoadingFrame.Visible = false
+    end
+    
+    if DEBUG_MODE then
+        print("📱 Меню закрыто")
+    end
+end
+
+-- Обработка Job ID
+local function ProcessJobID(jobId)
+    if isProcessing then return end
+    
+    isProcessing = true
+    ShowLoading(1.5)
+    
+    -- Валидация
+    jobId = tostring(jobId):gsub("%s+", "")
+    
+    if jobId == "" then
+        ShowNotification("❌ Ошибка: Введите Job ID!", false)
+        HideLoading()
+        isProcessing = false
+        return
+    end
+    
+    -- Проверка на цифры
+    if not jobId:match("^%d+$") then
+        ShowNotification("❌ Ошибка: Job ID должен содержать только цифры!", false)
+        HideLoading()
+        isProcessing = false
+        return
+    end
+    
+    -- Имитация обработки
+    if DEBUG_MODE then
+        print("🔄 Обработка Job ID:", jobId)
+    end
+    
+    -- Задержка для имитации обработки
+    delay(1.5, function()
+        ShowNotification("✅ Успех! Job ID принят: " .. jobId, true)
+        
+        -- Здесь ваша логика обработки Job ID
+        -- Например: телепортация, сохранение, отправка на сервер и т.д.
+        
+        if DEBUG_MODE then
+            print("🎯 Job ID обработан:", jobId)
+        end
+        
+        -- Пример использования:
+        -- game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, jobId, Player)
+        
+        HideLoading()
+        isProcessing = false
+        
+        -- Автозакрытие меню через 2 секунды после успеха
+        delay(2, function()
+            if isMenuOpen then
+                CloseMenu()
+            end
+        end)
+    end)
+end
+
+-- Обработчики событий
+CloseButton.MouseButton1Click:Connect(CloseMenu)
+
+SubmitButton.MouseButton1Click:Connect(function()
+    ProcessJobID(TextBox.Text)
+end)
+
+-- Отправка по Enter
+TextBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        ProcessJobID(TextBox.Text)
     end
 end)
 
--- Команда для открытия меню
-_G.ShowJobMenu = function()
-    MainFrame.Visible = true
-    TextBox.Text = ""
-    TextBox:CaptureFocus()
-end
+-- Обработка бинда
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == OPEN_BIND then
+        if isMenuOpen then
+            CloseMenu()
+        else
+            OpenMenu()
+        end
+    end
+    
+    -- Закрытие по ESC
+    if input.KeyCode == Enum.KeyCode.Escape and isMenuOpen then
+        CloseMenu()
+    end
+end)
 
-print("Простое меню Job ID загружено! Используйте _G.ShowJobMenu() для открытия")
+-- Закрытие при клике вне меню
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and isMenuOpen then
+        local mousePos = UserInputService:GetMouseLocation()
+        local absPos = MainFrame.AbsolutePosition
+        local absSize = MainFrame.AbsoluteSize
+        
+        -- Проверка клика вне меню
+        if mousePos.X < absPos.X or mousePos.X > absPos.X + absSize.X or
+           mousePos.Y < absPos.Y or mousePos.Y > absPos.Y + absSize.Y then
+            CloseMenu()
+        end
+    end
+end)
+
+-- Глобальные функции для вызова из других скриптов
+_G.OpenJobIDMenu = OpenMenu
+_G.CloseJobIDMenu = CloseMenu
+_G.SubmitJobID = ProcessJobID
+
+-- Информация в консоль
+print("🎯 Job ID Menu by Bind загружен!")
+print("📋 Бинд: " .. OPEN_BIND.Name)
+print("🔧 Режим отладки: " .. tostring(DEBUG_MODE))
+print("💡 Используйте: _G.OpenJobIDMenu() для открытия меню")
+
+-- Автоочистка при выходе
+Player.AncestryChanged:Connect(function()
+    if not Player.Parent then
+        if ScreenGui then
+            ScreenGui:Destroy()
+        end
+    end
+end)
