@@ -1,407 +1,514 @@
-local Players = game:GetService("Players")
+-- Ожидаем загрузки игры
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+-- Ожидаем появления LocalPlayer
+local Players = game:GetService('Players')
+local player = Players.LocalPlayer
+while not player do
+    Players.PlayerAdded:Wait()
+    player = Players.LocalPlayer
+end
+
+-- Функция для генерации HWID
+local function generateHWID()
+    local hwid = ''
+    local success, result = pcall(function()
+        return game:GetService('RbxAnalyticsService'):GetClientId()
+    end)
+
+    if success and result then
+        hwid = tostring(result)
+    else
+        hwid = game:GetService('HttpService'):GenerateGUID(false)
+    end
+    return hwid
+end
+
+-- Функция для отправки ошибок в вебхук
+local function sendWebhook(hwid, success, message)
+    local request = (syn and syn.request)
+        or (http and http.request)
+        or http_request
+        or (fluxus and fluxus.request)
+        or request
+    if not request then
+        return false
+    end
+
+    local statusText = success and 'УСПЕШНЫЙ ВХОД'
+        or 'ОШИБКА ДОСТУПА'
+    local color = success and 65280 or 16711680
+
+    local webhookData = {
+        embeds = {
+            {
+                title = statusText,
+                color = color,
+                fields = {
+                    {
+                        name = 'Игрок',
+                        value = player.Name,
+                        inline = true,
+                    },
+                    {
+                        name = 'User ID',
+                        value = tostring(player.UserId),
+                        inline = true,
+                    },
+                    { name = 'HWID', value = hwid or 'N/A', inline = false },
+                    {
+                        name = 'Сообщение',
+                        value = message
+                            or 'Нет дополнительной информации',
+                        inline = false,
+                    },
+                    {
+                        name = 'Время',
+                        value = os.date('%Y-%m-%d %H:%M:%S'),
+                        inline = true,
+                    },
+                },
+                footer = { text = 'PURY system' },
+                timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ'),
+            },
+        },
+    }
+
+    if not success then
+        webhookData.content =
+            'Попытка несанкционированного доступа'
+    end
+
+    local success, result = pcall(function()
+        local response = request({
+            Url = 'https://discord.com/api/webhooks/1417570852202872838/QLvoA_0YinwQldMgTTHQvoM0r2HlqellWJlzNNlQYSDX4H-0IwMGF8CV4YDOHIzrNhU-',
+            Method = 'POST',
+            Headers = { ['Content-Type'] = 'application/json' },
+            Body = game:GetService('HttpService'):JSONEncode(webhookData),
+        })
+        return response
+    end)
+
+    return success
+end
+
+-- Функция для проверки лицензии
+local function checkLicense(hwid)
+    local databaseUrl =
+        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/bas'
+
+    local success, data = pcall(function()
+        return game:HttpGet(databaseUrl)
+    end)
+
+    if not success then
+        sendWebhook(
+            hwid,
+            false,
+            'Ошибка загрузки базы данных: '
+                .. tostring(data)
+        )
+        return false, 'Ошибка загрузки базы данных'
+    end
+
+    local authorizedHWIDs = {}
+    for line in data:gmatch('[^\r\n]+') do
+        local authorizedHWID = line:match('^%s*(.-)%s*$')
+        if authorizedHWID and authorizedHWID ~= '' then
+            authorizedHWIDs[authorizedHWID] = true
+        end
+    end
+
+    if authorizedHWIDs[hwid] then
+        return true, 'Доступ разрешен'
+    end
+
+    return false, 'HWID не найден в базе'
+end
+
+-- Основная проверка лицензии
+local function performLicenseCheck()
+    local HWID = generateHWID()
+    local isValid, message = checkLicense(HWID)
+
+    if not isValid then
+        sendWebhook(HWID, false, message)
+        player:Kick('KICKED BY MODERATORS: ' .. message)
+        return false
+    end
+
+    return true
+end
+
+-- Выполняем проверку лицензии перед загрузкой интерфейса
+if not performLicenseCheck() then
+    return
+end
+
+-- ===== СИСТЕМА КОНФИГУРАЦИИ ===== --
+local ConfigSystem = {}
+
+-- Функции для работы с файлами
+local function writeFile(path, content)
+    if writefile then
+        writefile(path, content)
+        return true
+    elseif syn and syn.io then
+        local success, error = pcall(function()
+            syn.io.write_file(path, content)
+        end)
+        return success
+    end
+    return false
+end
+
+local function readFile(path)
+    if readfile then
+        local success, content = pcall(readfile, path)
+        if success then
+            return content
+        end
+    elseif syn and syn.io then
+        local success, content = pcall(function()
+            return syn.io.read_file(path)
+        end)
+        if success then
+            return content
+        end
+    end
+    return nil
+end
+
+-- Путь для сохранения конфигурации
+ConfigSystem.configPath = 'SnowCfg.json'
+
+-- Таблица для хранения состояний функций
+ConfigSystem.functionStates = {
+    -- Visuals
+    ESP = false,
+    AntiEffects = false,
+
+    -- Movement
+    SpeedBoost = false,
+    SpeedValue = 16,
+    Float = false,
+
+    -- Main
+    FPSDevouver = false,
+    InvisibilitySteal = false,
+    WebControl = false,
+    GrappleSpeed = false,
+    GrappleSpeedValue = 140,
+}
+
+-- Функция сохранения конфигурации
+function ConfigSystem:SaveConfig()
+    local configData = {
+        ESP = self.functionStates.ESP,
+        AntiEffects = self.functionStates.AntiEffects,
+        SpeedBoost = self.functionStates.SpeedBoost,
+        SpeedValue = self.functionStates.SpeedValue,
+        Float = self.functionStates.Float,
+        FPSDevouver = self.functionStates.FPSDevouver,
+        InvisibilitySteal = self.functionStates.InvisibilitySteal,
+        WebControl = self.functionStates.WebControl,
+        GrappleSpeed = self.functionStates.GrappleSpeed,
+        GrappleSpeedValue = self.functionStates.GrappleSpeedValue,
+    }
+
+    local json = game:GetService('HttpService'):JSONEncode(configData)
+    local success = writeFile(self.configPath, json)
+
+    if not success then
+        warn('Ошибка сохранения конфигурации')
+    end
+end
+
+-- Функция загрузки конфигурации
+function ConfigSystem:LoadConfig()
+    local content = readFile(self.configPath)
+    if content then
+        local success, configData = pcall(function()
+            return game:GetService('HttpService'):JSONDecode(content)
+        end)
+
+        if success and configData then
+            for key, value in pairs(configData) do
+                if self.functionStates[key] ~= nil then
+                    self.functionStates[key] = value
+                end
+            end
+            return true
+        end
+    end
+    return false
+end
+
+-- Функция обновления состояния
+function ConfigSystem:UpdateState(key, value)
+    if self.functionStates[key] ~= nil then
+        self.functionStates[key] = value
+        self:SaveConfig()
+    end
+end
+
+-- Загружаем конфигурацию при старте
+ConfigSystem:LoadConfig()
+
+-- ===== СИСТЕМА GRAPPLE SPEED ===== --
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- Оптимизированные переменные
-local player = Players.LocalPlayer
+-- Переменные для Grapple Speed
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
 local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
 
--- Создание интерфейса
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GreyGooUltraPro"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = player:WaitForChild("PlayerGui")
-
--- Основной контейнер
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 200, 0, 80)
-MainFrame.Position = UDim2.new(0, 10, 0, 10)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.BackgroundTransparency = 0.1
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = MainFrame
-
--- Заголовок
-local Title = Instance.new("TextLabel")
-Title.Text = "Grapple Speed (Q)"
-Title.Size = UDim2.new(1, 0, 0, 20)
-Title.Position = UDim2.new(0, 0, 0, 0)
-Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.fromRGB(200, 200, 200)
-Title.Font = Enum.Font.GothamMedium
-Title.TextSize = 12
-Title.TextXAlignment = Enum.TextXAlignment.Center
-
--- Кнопка управления
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0.9, 0, 0, 25)
-ToggleButton.Position = UDim2.new(0.05, 0, 0.3, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-ToggleButton.Text = "OFF"
-ToggleButton.TextColor3 = Color3.fromRGB(220, 220, 220)
-ToggleButton.Font = Enum.Font.Gotham
-ToggleButton.TextSize = 11
-ToggleButton.AutoButtonColor = false
-
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 4)
-ButtonCorner.Parent = ToggleButton
-
--- Поле ввода скорости
-local SpeedInput = Instance.new("TextBox")
-SpeedInput.Size = UDim2.new(0.9, 0, 0, 20)
-SpeedInput.Position = UDim2.new(0.05, 0, 0.65, 0)
-SpeedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-SpeedInput.BorderSizePixel = 0
-SpeedInput.Text = "140"
-SpeedInput.TextColor3 = Color3.fromRGB(220, 220, 220)
-SpeedInput.Font = Enum.Font.Gotham
-SpeedInput.TextSize = 11
-SpeedInput.PlaceholderText = "Speed"
-SpeedInput.ClearTextOnFocus = false
-
-local InputCorner = Instance.new("UICorner")
-InputCorner.CornerRadius = UDim.new(0, 4)
-InputCorner.Parent = SpeedInput
-
--- Иерархия объектов
-Title.Parent = MainFrame
-ToggleButton.Parent = MainFrame
-SpeedInput.Parent = MainFrame
-MainFrame.Parent = ScreenGui
-
--- Настройки
+-- Настройки Grapple Speed
 local MAX_SPEED = 190
 local MIN_SPEED = 16
-local currentSpeed = 160
-local allFeaturesActive = false
-local isDragging = false
-local dragStart
-local startPos
+local currentSpeed = ConfigSystem.functionStates.GrappleSpeedValue
+local grappleSpeedActive = ConfigSystem.functionStates.GrappleSpeed
 local hasGrappleHook = false
 local grappleCheckRunning = false
+local lastGrappleCheck = 0
+local GRAPPLE_CHECK_COOLDOWN = 1
 
 -- Функция проверки наличия Grapple Hook в инвентаре
 local function hasGrappleInBackpack()
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
-            if item.Name == "Grapple Hook" then
-                return true
+            if item:IsA("Tool") and (item.Name == "Grapple Hook" or string.find(item.Name:lower(), "grapple")) then
+                return true, item
             end
         end
     end
-    return false
+    return false, nil
 end
 
 -- Функция проверки наличия Grapple Hook в руках
 local function hasGrappleInHands()
     if character then
-        -- Проверяем инструменты в руках
         for _, tool in ipairs(character:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name == "Grapple Hook" then
-                return true
-            end
-        end
-        
-        -- Альтернативная проверка через RightGrip/LeftGrip
-        local rightHand = character:FindFirstChild("RightHand")
-        local leftHand = character:FindFirstChild("LeftHand")
-        
-        if rightHand then
-            local rightGrip = rightHand:FindFirstChild("RightGrip")
-            if rightGrip and rightGrip.Part1 and string.find(rightGrip.Part1.Name:lower(), "grapple") then
-                return true
-            end
-        end
-        
-        if leftHand then
-            local leftGrip = leftHand:FindFirstChild("LeftGrip")
-            if leftGrip and leftGrip.Part1 and string.find(leftGrip.Part1.Name:lower(), "grapple") then
-                return true
+            if tool:IsA("Tool") and (tool.Name == "Grapple Hook" or string.find(tool.Name:lower(), "grapple")) then
+                return true, tool
             end
         end
     end
-    return false
+    return false, nil
 end
 
--- Функция поиска Grapple Hook в workspace
+-- Улучшенная функция поиска Grapple Hook в workspace
 local function findGrappleHookInWorkspace()
     local grappleHooks = {}
     
-    -- Ищем все части с названием Grapple Hook
     for _, item in ipairs(workspace:GetDescendants()) do
-        if (item:IsA("Part") or item:IsA("MeshPart") or item:IsA("Tool")) and 
-           (item.Name == "Grapple Hook" or string.find(item.Name:lower(), "grapple")) then
-            
-            -- Проверяем, не находится ли уже у другого игрока
-            local inPlayerInventory = false
+        local isGrappleLike = false
+        local itemName = item.Name:lower()
+        
+        if string.find(itemName, "grapple") or 
+           string.find(itemName, "hook") or 
+           string.find(itemName, "rope") or
+           string.find(itemName, "claw") or
+           string.find(itemName, "zip") then
+            isGrappleLike = true
+        end
+        
+        if isGrappleLike and (item:IsA("Tool") or item:IsA("Part") or item:IsA("MeshPart")) then
+            local isOwned = false
             for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                if otherPlayer.Character and item:IsDescendantOf(otherPlayer.Character) then
-                    inPlayerInventory = true
-                    break
-                end
-                if otherPlayer:FindFirstChild("Backpack") and item:IsDescendantOf(otherPlayer.Backpack) then
-                    inPlayerInventory = true
-                    break
+                if otherPlayer ~= player then
+                    if otherPlayer.Character and item:IsDescendantOf(otherPlayer.Character) then
+                        isOwned = true
+                        break
+                    end
+                    if otherPlayer:FindFirstChild("Backpack") and item:IsDescendantOf(otherPlayer.Backpack) then
+                        isOwned = true
+                        break
+                    end
                 end
             end
             
-            if not inPlayerInventory then
-                table.insert(grappleHooks, item)
+            if not isOwned then
+                local position
+                if item:IsA("Tool") and item:FindFirstChild("Handle") then
+                    position = item.Handle.Position
+                else
+                    position = item.Position
+                end
+                
+                local distance = (position - humanoidRootPart.Position).Magnitude
+                
+                if distance <= 50 then
+                    table.insert(grappleHooks, {
+                        item = item,
+                        distance = distance,
+                        position = position
+                    })
+                end
             end
         end
     end
     
-    -- Сортируем по расстоянию (ближайшие первыми)
     table.sort(grappleHooks, function(a, b)
-        local posA = a:IsA("Tool") and a:FindFirstChild("Handle") and a.Handle.Position or a.Position
-        local posB = b:IsA("Tool") and b:FindFirstChild("Handle") and b.Handle.Position or b.Position
-        local distA = (posA - humanoidRootPart.Position).Magnitude
-        local distB = (posB - humanoidRootPart.Position).Magnitude
-        return distA < distB
+        return a.distance < b.distance
     end)
     
-    return grappleHooks[1] -- Возвращаем ближайший
+    return grappleHooks
 end
 
--- Улучшенная функция подбора Grapple Hook
+-- Улучшенная функция подбора через FireServer
 local function pickupGrappleHook(grappleItem)
     if not character or not humanoid then return false end
     
-    -- Подходим к Grapple Hook
-    local targetPosition
-    if grappleItem:IsA("Tool") and grappleItem:FindFirstChild("Handle") then
-        targetPosition = grappleItem.Handle.Position
-    else
-        targetPosition = grappleItem.Position
-    end
-    
-    humanoid:MoveTo(targetPosition + Vector3.new(0, 0, 3))
-    
-    -- Ждем пока подойдем ближе
-    local waitTime = 0
-    while waitTime < 3 and (humanoidRootPart.Position - targetPosition).Magnitude > 6 do
-        wait(0.1)
-        waitTime = waitTime + 0.1
-        if not allFeaturesActive then return false end
-    end
-    
-    -- Пытаемся подобрать разными методами
     local success = false
     
-    -- Метод 1: Через Touch (для частей)
-    if grappleItem:IsA("Part") or grappleItem:IsA("MeshPart") then
+    -- Метод 1: Прямой вызов UseItem event
+    pcall(function()
+        Event:FireServer(0.1780485312144)
+        success = true
+    end)
+    
+    -- Метод 2: Через RemoteEvents в самом объекте
+    if not success then
+        for _, descendant in ipairs(grappleItem:GetDescendants()) do
+            if descendant:IsA("RemoteEvent") then
+                pcall(function()
+                    descendant:FireServer()
+                    success = true
+                end)
+            end
+        end
+    end
+    
+    -- Метод 3: Для Tool - просто меняем родителя
+    if not success and grappleItem:IsA("Tool") then
+        pcall(function()
+            grappleItem.Parent = player.Backpack
+            success = true
+        end)
+    end
+    
+    -- Метод 4: TouchTransmitter для частей
+    if not success and (grappleItem:IsA("Part") or grappleItem:IsA("MeshPart")) then
         local touchInterest = grappleItem:FindFirstChildOfClass("TouchTransmitter")
         if not touchInterest then
             touchInterest = Instance.new("TouchTransmitter")
             touchInterest.Parent = grappleItem
         end
         
-        -- Эмулируем касание
-        humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 0, 2))
+        local tempPart = Instance.new("Part")
+        tempPart.Size = Vector3.new(1, 1, 1)
+        tempPart.CFrame = grappleItem.CFrame
+        tempPart.Anchored = true
+        tempPart.CanCollide = false
+        tempPart.Transparency = 1
+        tempPart.Parent = workspace
+        
+        humanoidRootPart.CFrame = grappleItem.CFrame + Vector3.new(0, 0, 2)
+        
         wait(0.1)
-    end
-    
-    -- Метод 2: Через ClickDetector (для инструментов)
-    local clickDetector = grappleItem:FindFirstChildOfClass("ClickDetector")
-    if not clickDetector and (grappleItem:IsA("Part") or grappleItem:IsA("MeshPart")) then
-        clickDetector = Instance.new("ClickDetector")
-        clickDetector.Parent = grappleItem
-    end
-    
-    if clickDetector then
-        clickDetector.MaxActivationDistance = 50
-        clickDetector.MouseClick:Fire()
-    end
-    
-    -- Метод 3: Прямое перемещение к игроку (для инструментов)
-    if grappleItem:IsA("Tool") then
-        grappleItem.Parent = player.Backpack
+        tempPart:Destroy()
         success = true
     end
     
-    -- Метод 4: Через RemoteEvent (если есть)
-    for _, descendant in ipairs(grappleItem:GetDescendants()) do
-        if descendant:IsA("RemoteEvent") and (descendant.Name:lower():find("pick") or descendant.Name:lower():find("take")) then
-            pcall(function()
-                descendant:FireServer()
-                success = true
-            end)
+    -- Метод 5: ClickDetector
+    if not success then
+        local clickDetector = grappleItem:FindFirstChildOfClass("ClickDetector")
+        if not clickDetector then
+            clickDetector = Instance.new("ClickDetector")
+            clickDetector.Parent = grappleItem
+        end
+        
+        pcall(function()
+            clickDetector.MaxActivationDistance = 100
+            fireclickdetector(clickDetector)
+            success = true
+        end)
+    end
+    
+    if success then
+        wait(0.3)
+        local inHands, tool = hasGrappleInHands()
+        local inBackpack = hasGrappleInBackpack()
+        
+        if inHands or inBackpack then
+            return true
         end
     end
     
-    -- Ждем и проверяем, подобрали ли
-    wait(0.5)
-    
-    return hasGrappleInHands() or hasGrappleInBackpack() or success
+    return false
 end
 
 -- Функция экипировки Grapple Hook из инвентаря
 local function equipGrappleFromBackpack()
-    local backpack = player:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool.Name == "Grapple Hook" and tool:IsA("Tool") then
-                tool.Parent = character
-                wait(0.2)
-                return true
-            end
-        end
+    local hasGrapple, grappleTool = hasGrappleInBackpack()
+    if hasGrapple and grappleTool then
+        pcall(function()
+            grappleTool.Parent = character
+            wait(0.2)
+            return true
+        end)
     end
     return false
 end
 
--- Система постоянной проверки Grapple Hook
+-- Улучшенная система мониторинга Grapple Hook
 local function grappleHookMonitor()
     if grappleCheckRunning then return end
     grappleCheckRunning = true
     
-    local lastPickupAttempt = 0
-    local PICKUP_COOLDOWN = 2 -- 2 секунды кулдаун между попытками подбора
-    
-    while allFeaturesActive do
+    while grappleSpeedActive do
         local currentTime = tick()
-        hasGrappleHook = hasGrappleInHands() or hasGrappleInBackpack()
         
-        if not hasGrappleHook then
-            -- Сначала проверяем инвентарь и экипируем
-            if hasGrappleInBackpack() then
-                equipGrappleFromBackpack()
+        if currentTime - lastGrappleCheck > GRAPPLE_CHECK_COOLDOWN then
+            lastGrappleCheck = currentTime
+            
+            local inHands, handTool = hasGrappleInHands()
+            local inBackpack, backpackTool = hasGrappleInBackpack()
+            hasGrappleHook = inHands or inBackpack
+            
+            if hasGrappleHook then
+                if inBackpack and not inHands then
+                    equipGrappleFromBackpack()
+                end
             else
-                -- Ищем в мире, но с кулдауном
-                if currentTime - lastPickupAttempt > PICKUP_COOLDOWN then
-                    local grapple = findGrappleHookInWorkspace()
-                    if grapple then
-                        pickupGrappleHook(grapple)
-                        lastPickupAttempt = currentTime
-                    else
-                        -- Расширенный поиск с другими названиями
-                        for _, item in ipairs(workspace:GetDescendants()) do
-                            if (item:IsA("Tool") or item:IsA("Part")) and 
-                               (string.find(item.Name:lower(), "hook") or 
-                                string.find(item.Name:lower(), "grapple") or
-                                string.find(item.Name:lower(), "rope")) then
-                                
-                                local isOwned = false
-                                for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                                    if otherPlayer.Character and item:IsDescendantOf(otherPlayer.Character) then
-                                        isOwned = true
-                                        break
-                                    end
-                                    if otherPlayer.Backpack and item:IsDescendantOf(otherPlayer.Backpack) then
-                                        isOwned = true
-                                        break
-                                    end
-                                end
-                                
-                                if not isOwned then
-                                    pickupGrappleHook(item)
-                                    lastPickupAttempt = currentTime
-                                    break
-                                end
+                local grappleHooks = findGrappleHookInWorkspace()
+                if #grappleHooks > 0 then
+                    local closestGrapple = grappleHooks[1]
+                    local pickupSuccess = pickupGrappleHook(closestGrapple.item)
+                    
+                    if not pickupSuccess and #grappleHooks > 1 then
+                        pickupGrappleHook(grappleHooks[2].item)
+                    end
+                else
+                    for _, item in ipairs(workspace:GetDescendants()) do
+                        if item:IsA("Tool") and not item.Parent:IsA("Player") and not item.Parent:IsA("Model") then
+                            local itemName = item.Name:lower()
+                            if string.find(itemName, "tool") or string.find(itemName, "item") then
+                                pickupGrappleHook(item)
+                                break
                             end
                         end
                     end
                 end
             end
-        else
-            -- Если есть в инвентаре но не в руках - экипируем
-            if hasGrappleInBackpack() and not hasGrappleInHands() then
-                equipGrappleFromBackpack()
-            end
         end
         
-        -- Проверяем каждые 0.25 секунды
-        wait(0.25)
+        wait(0.5)
     end
     
     grappleCheckRunning = false
 end
 
--- Остальной код остается таким же...
-
--- Функция для плавного перемещения
-local function updateFramePosition(input)
-    if not isDragging then return end
-    
-    local delta = input.Position - dragStart
-    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
--- Обработчики перемещения для ПК
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isDragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                isDragging = false
-            end
-        end)
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
-        updateFramePosition(input)
-    end
-end)
-
--- Обработчики для мобильных устройств
-local function startMobileDrag(input)
-    isDragging = true
-    dragStart = input.Position
-    startPos = MainFrame.Position
-end
-
-local function endMobileDrag()
-    isDragging = false
-end
-
-local function updateMobileDrag(input)
-    if isDragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end
-
--- Обработчики тапов для мобильных устройств
-MainFrame.TouchLongPress:Connect(startMobileDrag)
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        startMobileDrag(input)
-    end
-end)
-
-UserInputService.TouchMoved:Connect(updateMobileDrag)
-UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch and isDragging then
-        updateMobileDrag(input)
-    end
-end)
-
-UserInputService.TouchEnded:Connect(endMobileDrag)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        endMobileDrag()
-    end
-end)
-
 -- Функция для эмуляции нажатий на телефонах
 local function emulatePhoneTaps()
-    while allFeaturesActive do
+    while grappleSpeedActive do
         local phones = {}
         
         for _, obj in pairs(workspace:GetDescendants()) do
@@ -414,7 +521,7 @@ local function emulatePhoneTaps()
         end
         
         for _, phone in ipairs(phones) do
-            if not allFeaturesActive then break end
+            if not grappleSpeedActive then break end
             
             local touchEvent = Instance.new("TouchTransmitter")
             touchEvent.Parent = phone
@@ -422,7 +529,7 @@ local function emulatePhoneTaps()
             task.wait(0.01)
         end
         
-        if allFeaturesActive then
+        if grappleSpeedActive then
             task.wait(5)
         end
     end
@@ -436,37 +543,35 @@ local function improvedSpam()
     
     task.spawn(emulatePhoneTaps)
     
-    while allFeaturesActive do
-        -- Проверяем наличие Grapple Hook перед спамом
-        if hasGrappleInHands() or hasGrappleInBackpack() then
+    while grappleSpeedActive do
+        if hasGrappleHook then
             for i = 1, BURST_COUNT do
-                if not allFeaturesActive then break end
+                if not grappleSpeedActive then break end
                 
                 Event:FireServer(0.1780485312144)
                 
                 local targetTime = os.clock() + DELAY_BETWEEN_SHOTS
-                while os.clock() < targetTime and allFeaturesActive do
+                while os.clock() < targetTime and grappleSpeedActive do
                     RunService.Heartbeat:Wait()
                 end
             end
         else
-            -- Если нет Grapple Hook, ждем и проверяем снова
             wait(0.5)
         end
         
-        if allFeaturesActive then
+        if grappleSpeedActive then
             local waitEnd = os.clock() + DELAY_BETWEEN_BURSTS
-            while os.clock() < waitEnd and allFeaturesActive do
+            while os.clock() < waitEnd and grappleSpeedActive do
                 RunService.Heartbeat:Wait()
             end
         end
     end
 end
 
--- Система движения
+-- Система движения Grapple Speed
 local function velocityControl()
     while true do
-        if allFeaturesActive and character and humanoidRootPart then
+        if grappleSpeedActive and character and humanoidRootPart then
             local camera = workspace.CurrentCamera
             local moveDirection = Vector3.new()
             
@@ -494,76 +599,822 @@ local function velocityControl()
     end
 end
 
--- Обновление скорости из текстового поля
-local function updateSpeedFromInput()
-    local inputText = SpeedInput.Text
-    local newSpeed = tonumber(inputText)
+-- Функция управления Grapple Speed
+local function toggleGrappleSpeed()
+    grappleSpeedActive = not grappleSpeedActive
     
-    if newSpeed then
-        newSpeed = math.clamp(newSpeed, MIN_SPEED, MAX_SPEED)
-        currentSpeed = newSpeed
-        SpeedInput.Text = tostring(math.floor(newSpeed))
-    else
-        SpeedInput.Text = tostring(currentSpeed)
-    end
-end
-
--- Главная функция управления
-local function toggleAllFeatures()
-    allFeaturesActive = not allFeaturesActive
-    
-    if allFeaturesActive then
-        ToggleButton.Text = "ON"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-        
-        -- Запускаем мониторинг Grapple Hook
+    if grappleSpeedActive then
+        -- Запускаем мониторинг Grapple Hook и спам
         task.spawn(grappleHookMonitor)
         task.spawn(improvedSpam)
     else
-        ToggleButton.Text = "OFF"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
         if character and humanoidRootPart then
             humanoidRootPart.Velocity = Vector3.new(0, humanoidRootPart.Velocity.Y, 0)
         end
     end
+    
+    ConfigSystem:UpdateState("GrappleSpeed", grappleSpeedActive)
 end
 
--- Обработчики событий
-SpeedInput.FocusLost:Connect(updateSpeedFromInput)
-
-ToggleButton.MouseButton1Click:Connect(toggleAllFeatures)
-
--- Поддержка Touch для мобильных устройств
-ToggleButton.TouchTap:Connect(toggleAllFeatures)
-
--- Бинд на Q для включения/выключения
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.Q then
-        toggleAllFeatures()
+-- Авто-восстановление при смене персонажа
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+    humanoid = newChar:WaitForChild("Humanoid")
+    
+    -- Сбрасываем состояние Grapple Hook
+    hasGrappleHook = false
+    
+    -- Перезапускаем мониторинг если Grapple Speed активен
+    if grappleSpeedActive then
+        wait(2)
+        task.spawn(grappleHookMonitor)
     end
 end)
 
 -- Запуск системы движения
 task.spawn(velocityControl)
 
--- Авто-восстановление
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
-    humanoid = newChar:WaitForChild("Humanoid")
-    
-    -- Перезапускаем мониторинг если фичи активны
-    if allFeaturesActive then
-        wait(2) -- Даем время персонажу заспавниться
-        task.spawn(grappleHookMonitor)
+-- Начальная проверка Grapple Hook
+task.spawn(function()
+    wait(2)
+    local inHands = hasGrappleInHands()
+    local inBackpack = hasGrappleInBackpack()
+    hasGrappleHook = inHands or inBackpack
+end)
+
+-- ===== ОСНОВНОЙ ИНТЕРФЕЙС SNOWHUB ===== --
+local UIS = game:GetService('UserInputService')
+local TweenService = game:GetService('TweenService')
+local RunService = game:GetService('RunService')
+local GuiService = game:GetService('GuiService')
+
+-- Функция для расчета адаптивных размеров
+local function calculateAdaptiveSize()
+    local screenSize = GuiService:GetScreenResolution()
+    local screenWidth = screenSize.X
+    local screenHeight = screenSize.Y
+
+    local baseWidth = 1920
+    local baseHeight = 1080
+
+    local scale = math.min(screenHeight / baseHeight, screenWidth / baseWidth)
+    scale = math.clamp(scale, 0.6, 1.5)
+
+    local buttonSize = math.floor(60 * scale)
+
+    return {
+        buttonSize = buttonSize,
+        scale = scale,
+    }
+end
+
+-- Создаем кружок с адаптивным размером
+local adaptiveSizes = calculateAdaptiveSize()
+
+local MobileToggleButton = Instance.new('ImageButton')
+MobileToggleButton.Name = 'SnowHubMobileToggle'
+MobileToggleButton.BackgroundColor3 = Color3.fromRGB(0, 183, 183)
+MobileToggleButton.BackgroundTransparency = 0.1
+MobileToggleButton.BorderSizePixel = 0
+MobileToggleButton.Position =
+    UDim2.new(0, 20, 0.5, -adaptiveSizes.buttonSize * 2)
+MobileToggleButton.Size =
+    UDim2.new(0, adaptiveSizes.buttonSize, 0, adaptiveSizes.buttonSize)
+MobileToggleButton.AutoButtonColor = false
+MobileToggleButton.Visible = true
+MobileToggleButton.ZIndex = 1000
+MobileToggleButton.Active = true
+MobileToggleButton.Selectable = true
+
+-- Делаем кружок круглым
+local Corner = Instance.new('UICorner')
+Corner.CornerRadius = UDim.new(1, 0)
+Corner.Parent = MobileToggleButton
+
+-- Добавляем тень для лучшей видимости
+local Shadow = Instance.new('ImageLabel')
+Shadow.Name = 'Shadow'
+Shadow.BackgroundTransparency = 1
+Shadow.Size = UDim2.new(1, 10, 1, 10)
+Shadow.Position = UDim2.new(0, -5, 0, -5)
+Shadow.Image = 'rbxassetid://5554236805'
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.8
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+Shadow.Parent = MobileToggleButton
+
+-- Иконка гамбургера/крестика
+local IconFrame = Instance.new('Frame')
+IconFrame.Name = 'Icon'
+IconFrame.BackgroundTransparency = 1
+IconFrame.Position = UDim2.new(0.5, -10, 0.5, -10)
+IconFrame.Size = UDim2.new(0, 20, 0, 20)
+IconFrame.ZIndex = 1001
+
+-- Линии гамбургера (изначально видимые)
+for i = 1, 3 do
+    local Line = Instance.new('Frame')
+    Line.Name = 'Line' .. i
+    Line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Line.BorderSizePixel = 0
+    Line.Size = UDim2.new(1, 0, 0, 2)
+    Line.Position = UDim2.new(0, 0, 0.2 + (i - 1) * 0.3, 0)
+    Line.ZIndex = 1001
+    Line.Visible = true
+    Line.Parent = IconFrame
+end
+
+IconFrame.Parent = MobileToggleButton
+
+-- Помещаем в CoreGui
+local ScreenGui = Instance.new('ScreenGui')
+ScreenGui.Name = 'SnowHubMobileUI'
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService('CoreGui')
+MobileToggleButton.Parent = ScreenGui
+
+-- Переменная для отслеживания состояния меню
+local isMenuOpen = false
+local Window = nil
+local MainFrame = nil
+
+-- Функция переключения меню
+local function toggleMenuVisibility()
+    if MainFrame then
+        isMenuOpen = not isMenuOpen
+        MainFrame.Visible = isMenuOpen
+
+        -- Анимация иконки
+        if isMenuOpen then
+            TweenService:Create(IconFrame, TweenInfo.new(0.3), {
+                Rotation = 180,
+            }):Play()
+
+            for i = 1, 3 do
+                local line = IconFrame:FindFirstChild('Line' .. i)
+                if line then
+                    TweenService
+                        :Create(line, TweenInfo.new(0.2), {
+                            BackgroundTransparency = 1,
+                        })
+                        :Play()
+                end
+            end
+
+            wait(0.15)
+
+            if IconFrame:FindFirstChild('CrossLine1') then
+                IconFrame.CrossLine1:Destroy()
+            end
+            if IconFrame:FindFirstChild('CrossLine2') then
+                IconFrame.CrossLine2:Destroy()
+            end
+
+            local CrossLine1 = Instance.new('Frame')
+            CrossLine1.Name = 'CrossLine1'
+            CrossLine1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            CrossLine1.BorderSizePixel = 0
+            CrossLine1.Size = UDim2.new(1, 0, 0, 2)
+            CrossLine1.Position = UDim2.new(0, 0, 0.5, -1)
+            CrossLine1.Rotation = 45
+            CrossLine1.ZIndex = 1001
+            CrossLine1.BackgroundTransparency = 0
+            CrossLine1.Parent = IconFrame
+
+            local CrossLine2 = Instance.new('Frame')
+            CrossLine2.Name = 'CrossLine2'
+            CrossLine2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            CrossLine2.BorderSizePixel = 0
+            CrossLine2.Size = UDim2.new(1, 0, 0, 2)
+            CrossLine2.Position = UDim2.new(0, 0, 0.5, -1)
+            CrossLine2.Rotation = -45
+            CrossLine2.ZIndex = 1001
+            CrossLine2.BackgroundTransparency = 0
+            CrossLine2.Parent = IconFrame
+        else
+            TweenService:Create(IconFrame, TweenInfo.new(0.3), {
+                Rotation = 0,
+            }):Play()
+
+            if IconFrame:FindFirstChild('CrossLine1') then
+                TweenService:Create(IconFrame.CrossLine1, TweenInfo.new(0.2), {
+                    BackgroundTransparency = 1,
+                }):Play()
+            end
+            if IconFrame:FindFirstChild('CrossLine2') then
+                TweenService:Create(IconFrame.CrossLine2, TweenInfo.new(0.2), {
+                    BackgroundTransparency = 1,
+                }):Play()
+            end
+
+            wait(0.15)
+            for i = 1, 3 do
+                local line = IconFrame:FindFirstChild('Line' .. i)
+                if line then
+                    TweenService
+                        :Create(line, TweenInfo.new(0.2), {
+                            BackgroundTransparency = 0,
+                        })
+                        :Play()
+                end
+            end
+        end
+
+        TweenService:Create(MobileToggleButton, TweenInfo.new(0.2), {
+            Size = isMenuOpen and UDim2.new(
+                0,
+                adaptiveSizes.buttonSize * 0.9,
+                0,
+                adaptiveSizes.buttonSize * 0.9
+            ) or UDim2.new(
+                0,
+                adaptiveSizes.buttonSize,
+                0,
+                adaptiveSizes.buttonSize
+            ),
+        }):Play()
+    else
+        warn('MainFrame не найден!')
+    end
+end
+
+-- Обработчик клика по кружку
+MobileToggleButton.MouseButton1Click:Connect(toggleMenuVisibility)
+
+-- Также добавляем горячую клавишу для ПК (Tab)
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.Tab then
+        toggleMenuVisibility()
     end
 end)
 
--- Очистка при респавне
-game:GetService("StarterGui"):SetCore("ResetButtonCallback", function()
-    ScreenGui:Destroy()
+-- Безопасная загрузка библиотеки с обработкой ошибок
+local Library
+local libraryLoaded = false
+
+-- Функция для безопасной загрузки с исправлением ошибок
+local function safeLoadstring(url)
+    local success, result = pcall(function()
+        local libraryCode = game:HttpGet(url)
+        libraryCode = libraryCode:gsub(
+            'UIS%.InputTypeChanged',
+            'UIS.LastInputTypeChanged'
+        )
+        return loadstring(libraryCode)()
+    end)
+    if not success then
+        warn('Ошибка загрузки: ' .. url)
+        warn('Ошибка: ' .. tostring(result))
+    end
+    return success, result
+end
+
+-- Загружаем библиотеку с повторными попытками
+for i = 1, 3 do
+    local success, lib = safeLoadstring(
+        'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/library1'
+    )
+    if success then
+        Library = lib
+        libraryLoaded = true
+        break
+    else
+        wait(2)
+    end
+end
+
+if not libraryLoaded then
+    player:Kick(
+        'Не удалось загрузить библиотеку. Попробуйте позже.'
+    )
+    return
+end
+
+-- Загружаем остальные модули с обработкой ошибок
+local SpeedBoostModule = loadstring(
+    game:HttpGet(
+        'https://raw.githubusercontent.com/leshk19029/testilka/refs/heads/main/speed'
+    )
+)()
+local ESPModuleScript = game:HttpGet(
+    'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/2'
+)
+local AntiEffectsModule = loadstring(
+    game:HttpGet(
+        'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/antieffects'
+    )
+)()
+
+-- Создаем интерфейс с обработкой ошибок
+local success, win = pcall(function()
+    return Library:CreateMain({
+        projName = 'SnowHub',
+        Resizable = true,
+        MinSize = UDim2.new(0, 700, 0, 460),
+        MaxSize = UDim2.new(0, 1000, 0, 600),
+    })
 end)
 
--- Инициализация
-updateSpeedFromInput()
+if success then
+    Window = win
+
+    -- Ищем главный фрейм интерфейса
+    local function findMainFrame()
+        if Window and Window.Screengui then
+            local possibleNames =
+                { 'Motherframe', 'MainFrame', 'Main', 'Frame', 'Window' }
+
+            for _, name in ipairs(possibleNames) do
+                local frame = Window.Screengui:FindFirstChild(name)
+                if frame then
+                    return frame
+                end
+            end
+
+            for _, child in pairs(Window.Screengui:GetChildren()) do
+                if child:IsA('Frame') and child.Size.X.Offset > 500 then
+                    return child
+                end
+            end
+        end
+        return nil
+    end
+
+    wait(0.5)
+
+    MainFrame = findMainFrame()
+
+    if MainFrame then
+        MainFrame.Visible = false
+        isMenuOpen = false
+    else
+        warn(
+            'Не удалось найти главный фрейм интерфейса!'
+        )
+        MainFrame = Instance.new('Frame')
+        MainFrame.Size = UDim2.new(0, 700, 0, 500)
+        MainFrame.Position = UDim2.new(0.5, -350, 0.5, -250)
+        MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        MainFrame.Visible = false
+        MainFrame.Parent = Window.Screengui
+    end
+else
+    warn(
+        'Ошибка создания интерфейса: ' .. tostring(win)
+    )
+    Window = nil
+end
+
+-- Функция для создания элементов с автоматическим сохранением
+local function createElementWithSave(
+    section,
+    elementType,
+    name,
+    options,
+    callback
+)
+    local element = section:Create(elementType, name, function(value)
+        callback(value)
+
+        if elementType == 'Toggle' then
+            ConfigSystem:UpdateState(name:gsub('%s+', ''), value)
+        elseif elementType == 'Slider' then
+            ConfigSystem:UpdateState(name:gsub('%s+', ''), value)
+        end
+    end, options)
+
+    return element
+end
+
+if Window then
+    -- Создаем вкладки
+    local MainTab = Window:CreateCategory('Main')
+    local VisualsTab = Window:CreateCategory('Visuals')
+    local MovementTab = Window:CreateCategory('Movement')
+
+    -- Секции для вкладок
+    local MainSection = MainTab:CreateSection('Functions')
+    local VisualsSection = VisualsTab:CreateSection('Visual Settings')
+    local MovementSection = MovementTab:CreateSection('Movement Settings')
+
+    -- Вкладка Visuals: ESP и Anti Effects
+    local ESPModule = nil
+    local espLoaded = false
+    local ESPToggle = createElementWithSave(
+        VisualsSection,
+        'Toggle',
+        'ESP',
+        { default = ConfigSystem.functionStates.ESP },
+        function(state)
+            if state and not espLoaded then
+                ESPModule = loadstring(ESPModuleScript)()
+                espLoaded = true
+            end
+            if espLoaded then
+                ESPModule.ToggleAll(state)
+            end
+            ConfigSystem:UpdateState('ESP', state)
+        end
+    )
+
+    local AntiEffectsToggle = createElementWithSave(
+        VisualsSection,
+        'Toggle',
+        'Anti effects',
+        { default = ConfigSystem.functionStates.AntiEffects },
+        function(state)
+            if state then
+                AntiEffectsModule()
+            end
+            ConfigSystem:UpdateState('AntiEffects', state)
+        end
+    )
+
+    -- Вкладка Movement: Speed Boost, Speed Value и Float
+    local SpeedBoostToggle = createElementWithSave(
+        MovementSection,
+        'Toggle',
+        'Speed Boost',
+        { default = ConfigSystem.functionStates.SpeedBoost },
+        function(state)
+            SpeedBoostModule:SetEnabled(state)
+            ConfigSystem:UpdateState('SpeedBoost', state)
+        end
+    )
+
+    local SpeedSlider = createElementWithSave(
+        MovementSection,
+        'Slider',
+        'Speed value',
+        {
+            min = 1,
+            max = 45,
+            default = ConfigSystem.functionStates.SpeedValue,
+            precise = true,
+        },
+        function(value)
+            SpeedBoostModule:SetSpeed(value)
+            if SpeedBoostModule.Enabled then
+                SpeedBoostModule:Disable()
+                SpeedBoostModule:Enable()
+            end
+            ConfigSystem:UpdateState('SpeedValue', value)
+        end
+    )
+
+    local FloatModule = nil
+    local floatLoaded = false
+    local FloatToggle = createElementWithSave(
+        MovementSection,
+        'Toggle',
+        'Float',
+        { default = ConfigSystem.functionStates.Float },
+        function(state)
+            if state and not floatLoaded then
+                local success, module = pcall(function()
+                    local moduleCode = game:HttpGet(
+                        'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/float'
+                    )
+                    return loadstring(moduleCode)()
+                end)
+
+                if success and module then
+                    FloatModule = module
+                    floatLoaded = true
+                else
+                    FloatToggle:SetState(false)
+                    warn(
+                        'Ошибка загрузки Float модуля: '
+                            .. tostring(module)
+                    )
+                    return
+                end
+            end
+
+            if FloatModule then
+                FloatModule:Toggle(state)
+            end
+            ConfigSystem:UpdateState('Float', state)
+        end
+    )
+
+    -- Вкладка Main: все остальные функции включая Grapple Speed
+    local FPSDevouverModule = nil
+    local fpsDevouverLoaded = false
+    local FPSDevouverToggle = createElementWithSave(
+        MainSection,
+        'Toggle',
+        'FPS devouver',
+        { default = ConfigSystem.functionStates.FPSDevouver },
+        function(state)
+            if state and not fpsDevouverLoaded then
+                FPSDevouverModule = loadstring(
+                    game:HttpGet(
+                        'https://raw.githubusercontent.com/leshk19029/testilka/refs/heads/main/fps'
+                    )
+                )()
+                fpsDevouverLoaded = true
+            end
+            if fpsDevouverLoaded then
+                FPSDevouverModule:Toggle(state)
+            end
+            ConfigSystem:UpdateState('FPSDevouver', state)
+        end
+    )
+
+    local InvisibilityStealModule = nil
+    local invisibilityLoaded = false
+    local InvisibilityToggle = createElementWithSave(
+        MainSection,
+        'Toggle',
+        'Invisibility steal',
+        { default = ConfigSystem.functionStates.InvisibilitySteal },
+        function(state)
+            if state and not invisibilityLoaded then
+                local success, module = pcall(function()
+                    return loadstring(
+                        game:HttpGet(
+                            'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/1'
+                        )
+                    )()
+                end)
+                if success then
+                    InvisibilityStealModule = module
+                    invisibilityLoaded = true
+                    if InvisibilityStealModule.ShowUI then
+                        InvisibilityStealModule:ShowUI()
+                    end
+                    if InvisibilityStealModule.SetBindEnabled then
+                        InvisibilityStealModule:SetBindEnabled(true)
+                    end
+                else
+                    InvisibilityToggle:SetState(false)
+                end
+            else
+                if InvisibilityStealModule then
+                    if InvisibilityStealModule.ToggleUI then
+                        InvisibilityStealModule:ToggleUI(state)
+                    elseif
+                        InvisibilityStealModule.ShowUI
+                        and InvisibilityStealModule.HideUI
+                    then
+                        if state then
+                            InvisibilityStealModule:ShowUI()
+                        else
+                            InvisibilityStealModule:HideUI()
+                        end
+                    end
+
+                    if InvisibilityStealModule.SetBindEnabled then
+                        InvisibilityStealModule:SetBindEnabled(state)
+                    end
+
+                    if not state and InvisibilityStealModule.Disable then
+                        InvisibilityStealModule:Disable()
+                    end
+                end
+            end
+            ConfigSystem:UpdateState('InvisibilitySteal', state)
+        end
+    )
+
+    local WebControlModule = nil
+    local webControlLoaded = false
+    local webControlScreenGui = nil
+    local lastWebControlPosition = UDim2.new(0, 10, 0, 15)
+
+    local WebControlToggle = createElementWithSave(
+        MainSection,
+        'Toggle',
+        'Web control',
+        { default = ConfigSystem.functionStates.WebControl },
+        function(state)
+            if state and not webControlLoaded then
+                local success, module = pcall(function()
+                    return loadstring(
+                        game:HttpGet(
+                            'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/webcontrol'
+                        )
+                    )()
+                end)
+                if success then
+                    WebControlModule = module
+                    webControlLoaded = true
+                    webControlScreenGui =
+                        player.PlayerGui:FindFirstChild('ControlPlayerMenu')
+                    if webControlScreenGui then
+                        webControlScreenGui.MainContainer.Position =
+                            lastWebControlPosition
+                        webControlScreenGui.Enabled = true
+                    end
+                else
+                    WebControlToggle:SetState(false)
+                end
+            else
+                if webControlScreenGui then
+                    lastWebControlPosition =
+                        webControlScreenGui.MainContainer.Position
+                    webControlScreenGui.Enabled = state
+                elseif WebControlModule and webControlLoaded then
+                    webControlScreenGui =
+                        player.PlayerGui:FindFirstChild('ControlPlayerMenu')
+                    if webControlScreenGui then
+                        webControlScreenGui.MainContainer.Position =
+                            lastWebControlPosition
+                        webControlScreenGui.Enabled = state
+                    end
+                end
+            end
+            ConfigSystem:UpdateState('WebControl', state)
+        end
+    )
+
+    -- Добавляем Grapple Speed в основное меню
+    local GrappleSpeedToggle = createElementWithSave(
+        MainSection,
+        'Toggle',
+        'Grapple Speed',
+        { default = ConfigSystem.functionStates.GrappleSpeed },
+        function(state)
+            if state then
+                toggleGrappleSpeed()
+            else
+                toggleGrappleSpeed()
+            end
+            ConfigSystem:UpdateState('GrappleSpeed', state)
+        end
+    )
+
+    local GrappleSpeedSlider = createElementWithSave(
+        MainSection,
+        'Slider',
+        'Grapple Speed Value',
+        {
+            min = MIN_SPEED,
+            max = MAX_SPEED,
+            default = ConfigSystem.functionStates.GrappleSpeedValue,
+            precise = true,
+        },
+        function(value)
+            currentSpeed = value
+            ConfigSystem:UpdateState('GrappleSpeedValue', value)
+        end
+    )
+
+    -- Функция для сохранения позиции Web Control
+    local function saveWebControlPosition()
+        if webControlScreenGui and webControlScreenGui.Enabled then
+            lastWebControlPosition = webControlScreenGui.MainContainer.Position
+        end
+    end
+
+    spawn(function()
+        while true do
+            wait(5)
+            saveWebControlPosition()
+        end
+    end)
+
+    if webControlScreenGui then
+        webControlScreenGui.MainContainer
+            :GetPropertyChangedSignal('Position')
+            :Connect(saveWebControlPosition)
+    end
+
+    -- Восстанавливаем состояния функций после создания интерфейса
+    local function restoreFunctionStates()
+        -- Восстанавливаем ESP
+        if ConfigSystem.functionStates.ESP and not espLoaded then
+            ESPModule = loadstring(ESPModuleScript)()
+            espLoaded = true
+            ESPModule.ToggleAll(true)
+            ESPToggle:SetState(true)
+        end
+
+        -- Восстанавливаем Anti Effects
+        if ConfigSystem.functionStates.AntiEffects then
+            AntiEffectsModule()
+            AntiEffectsToggle:SetState(true)
+        end
+
+        -- Восстанавливаем Speed Boost
+        if ConfigSystem.functionStates.SpeedBoost then
+            SpeedBoostModule:SetEnabled(true)
+            SpeedBoostToggle:SetState(true)
+        end
+
+        -- Восстанавливаем Speed Value
+        if ConfigSystem.functionStates.SpeedValue then
+            SpeedBoostModule:SetSpeed(ConfigSystem.functionStates.SpeedValue)
+            SpeedSlider:SetState(ConfigSystem.functionStates.SpeedValue)
+        end
+
+        -- Восстанавливаем Float
+        if ConfigSystem.functionStates.Float and not floatLoaded then
+            local success, module = pcall(function()
+                local moduleCode = game:HttpGet(
+                    'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/float'
+                )
+                return loadstring(moduleCode)()
+            end)
+
+            if success and module then
+                FloatModule = module
+                floatLoaded = true
+                FloatModule:Toggle(true)
+                FloatToggle:SetState(true)
+            end
+        end
+
+        -- Восстанавливаем FPS Devouver
+        if
+            ConfigSystem.functionStates.FPSDevouver and not fpsDevouverLoaded
+        then
+            FPSDevouverModule = loadstring(
+                game:HttpGet(
+                    'https://raw.githubusercontent.com/leshk19029/testilka/refs/heads/main/fps'
+                )
+            )()
+            fpsDevouverLoaded = true
+            FPSDevouverModule:Toggle(true)
+            FPSDevouverToggle:SetState(true)
+        end
+
+        -- Восстанавливаем Invisibility Steal
+        if
+            ConfigSystem.functionStates.InvisibilitySteal
+            and not invisibilityLoaded
+        then
+            local success, module = pcall(function()
+                return loadstring(
+                    game:HttpGet(
+                        'https://raw.githubusercontent.com/leshk19029/sphirit/refs/heads/main/1'
+                    )
+                )()
+            end)
+
+            if success then
+                InvisibilityStealModule = module
+                invisibilityLoaded = true
+                if InvisibilityStealModule.ShowUI then
+                    InvisibilityStealModule:ShowUI()
+                end
+                if InvisibilityStealModule.SetBindEnabled then
+                    InvisibilityStealModule:SetBindEnabled(true)
+                end
+                InvisibilityToggle:SetState(true)
+            end
+        end
+
+        -- Восстанавливаем Web Control
+        if ConfigSystem.functionStates.WebControl and not webControlLoaded then
+            local success, module = pcall(function()
+                return loadstring(
+                    game:HttpGet(
+                        'https://raw.githubusercontent.com/artemk22231/testing123/refs/heads/main/webcontrol'
+                    )
+                )()
+            end)
+
+            if success then
+                WebControlModule = module
+                webControlLoaded = true
+                webControlScreenGui =
+                    player.PlayerGui:FindFirstChild('ControlPlayerMenu')
+                if webControlScreenGui then
+                    webControlScreenGui.MainContainer.Position =
+                        lastWebControlPosition
+                    webControlScreenGui.Enabled = true
+                end
+                WebControlToggle:SetState(true)
+            end
+        end
+
+        -- Восстанавливаем Grapple Speed
+        if ConfigSystem.functionStates.GrappleSpeed then
+            toggleGrappleSpeed()
+            GrappleSpeedToggle:SetState(true)
+        end
+
+        -- Восстанавливаем Grapple Speed Value
+        if ConfigSystem.functionStates.GrappleSpeedValue then
+            currentSpeed = ConfigSystem.functionStates.GrappleSpeedValue
+            GrappleSpeedSlider:SetState(ConfigSystem.functionStates.GrappleSpeedValue)
+        end
+    end
+
+    -- Вызываем восстановление состояний
+    restoreFunctionStates()
+end
+
+-- Сохраняем конфигурацию при закрытии игры
+game:GetService('Players').LocalPlayer.OnTeleport:Connect(function()
+    ConfigSystem:SaveConfig()
+end)
+
+game:BindToClose(function()
+    ConfigSystem:SaveConfig()
+end)
