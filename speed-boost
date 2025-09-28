@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
 local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
 
 -- Создание интерфейса
@@ -105,19 +106,27 @@ end
 -- Функция проверки наличия Grapple Hook в руках
 local function hasGrappleInHands()
     if character then
+        -- Проверяем инструменты в руках
+        for _, tool in ipairs(character:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name == "Grapple Hook" then
+                return true
+            end
+        end
+        
+        -- Альтернативная проверка через RightGrip/LeftGrip
         local rightHand = character:FindFirstChild("RightHand")
         local leftHand = character:FindFirstChild("LeftHand")
         
         if rightHand then
             local rightGrip = rightHand:FindFirstChild("RightGrip")
-            if rightGrip and rightGrip.Part1 and rightGrip.Part1.Name == "Grapple Hook" then
+            if rightGrip and rightGrip.Part1 and string.find(rightGrip.Part1.Name:lower(), "grapple") then
                 return true
             end
         end
         
         if leftHand then
             local leftGrip = leftHand:FindFirstChild("LeftGrip")
-            if leftGrip and leftGrip.Part1 and leftGrip.Part1.Name == "Grapple Hook" then
+            if leftGrip and leftGrip.Part1 and string.find(leftGrip.Part1.Name:lower(), "grapple") then
                 return true
             end
         end
@@ -127,46 +136,129 @@ end
 
 -- Функция поиска Grapple Hook в workspace
 local function findGrappleHookInWorkspace()
+    local grappleHooks = {}
+    
+    -- Ищем все части с названием Grapple Hook
     for _, item in ipairs(workspace:GetDescendants()) do
-        if item.Name == "Grapple Hook" and item:IsA("Part") then
-            -- Проверяем, не находится ли уже в руках другого игрока
-            local inSomeoneHands = false
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player.Character and item:IsDescendantOf(player.Character) then
-                    inSomeoneHands = true
+        if (item:IsA("Part") or item:IsA("MeshPart") or item:IsA("Tool")) and 
+           (item.Name == "Grapple Hook" or string.find(item.Name:lower(), "grapple")) then
+            
+            -- Проверяем, не находится ли уже у другого игрока
+            local inPlayerInventory = false
+            for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                if otherPlayer.Character and item:IsDescendantOf(otherPlayer.Character) then
+                    inPlayerInventory = true
+                    break
+                end
+                if otherPlayer:FindFirstChild("Backpack") and item:IsDescendantOf(otherPlayer.Backpack) then
+                    inPlayerInventory = true
                     break
                 end
             end
             
-            if not inSomeoneHands then
-                return item
+            if not inPlayerInventory then
+                table.insert(grappleHooks, item)
             end
         end
     end
-    return nil
+    
+    -- Сортируем по расстоянию (ближайшие первыми)
+    table.sort(grappleHooks, function(a, b)
+        local posA = a:IsA("Tool") and a:FindFirstChild("Handle") and a.Handle.Position or a.Position
+        local posB = b:IsA("Tool") and b:FindFirstChild("Handle") and b.Handle.Position or b.Position
+        local distA = (posA - humanoidRootPart.Position).Magnitude
+        local distB = (posB - humanoidRootPart.Position).Magnitude
+        return distA < distB
+    end)
+    
+    return grappleHooks[1] -- Возвращаем ближайший
 end
 
--- Функция подбора Grapple Hook
-local function pickupGrappleHook(grapplePart)
-    if character and grapplePart then
-        -- Подходим к Grapple Hook
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid:MoveTo(grapplePart.Position + Vector3.new(2, 0, 2))
-            
-            -- Ждем пока подойдем ближе
-            wait(0.5)
-            
-            -- Пытаемся подобрать (эмулируем клик)
-            local clickEvent = Instance.new("ClickDetector")
-            clickEvent.Parent = grapplePart
-            clickEvent.MouseClick:Fire()
-            
-            -- Альтернативный метод - через Touch
-            local touchEvent = Instance.new("TouchTransmitter")
-            touchEvent.Parent = grapplePart
+-- Улучшенная функция подбора Grapple Hook
+local function pickupGrappleHook(grappleItem)
+    if not character or not humanoid then return false end
+    
+    -- Подходим к Grapple Hook
+    local targetPosition
+    if grappleItem:IsA("Tool") and grappleItem:FindFirstChild("Handle") then
+        targetPosition = grappleItem.Handle.Position
+    else
+        targetPosition = grappleItem.Position
+    end
+    
+    humanoid:MoveTo(targetPosition + Vector3.new(0, 0, 3))
+    
+    -- Ждем пока подойдем ближе
+    local waitTime = 0
+    while waitTime < 3 and (humanoidRootPart.Position - targetPosition).Magnitude > 6 do
+        wait(0.1)
+        waitTime = waitTime + 0.1
+        if not allFeaturesActive then return false end
+    end
+    
+    -- Пытаемся подобрать разными методами
+    local success = false
+    
+    -- Метод 1: Через Touch (для частей)
+    if grappleItem:IsA("Part") or grappleItem:IsA("MeshPart") then
+        local touchInterest = grappleItem:FindFirstChildOfClass("TouchTransmitter")
+        if not touchInterest then
+            touchInterest = Instance.new("TouchTransmitter")
+            touchInterest.Parent = grappleItem
+        end
+        
+        -- Эмулируем касание
+        humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 0, 2))
+        wait(0.1)
+    end
+    
+    -- Метод 2: Через ClickDetector (для инструментов)
+    local clickDetector = grappleItem:FindFirstChildOfClass("ClickDetector")
+    if not clickDetector and (grappleItem:IsA("Part") or grappleItem:IsA("MeshPart")) then
+        clickDetector = Instance.new("ClickDetector")
+        clickDetector.Parent = grappleItem
+    end
+    
+    if clickDetector then
+        clickDetector.MaxActivationDistance = 50
+        clickDetector.MouseClick:Fire()
+    end
+    
+    -- Метод 3: Прямое перемещение к игроку (для инструментов)
+    if grappleItem:IsA("Tool") then
+        grappleItem.Parent = player.Backpack
+        success = true
+    end
+    
+    -- Метод 4: Через RemoteEvent (если есть)
+    for _, descendant in ipairs(grappleItem:GetDescendants()) do
+        if descendant:IsA("RemoteEvent") and (descendant.Name:lower():find("pick") or descendant.Name:lower():find("take")) then
+            pcall(function()
+                descendant:FireServer()
+                success = true
+            end)
         end
     end
+    
+    -- Ждем и проверяем, подобрали ли
+    wait(0.5)
+    
+    return hasGrappleInHands() or hasGrappleInBackpack() or success
+end
+
+-- Функция экипировки Grapple Hook из инвентаря
+local function equipGrappleFromBackpack()
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool.Name == "Grapple Hook" and tool:IsA("Tool") then
+                tool.Parent = character
+                wait(0.2)
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- Система постоянной проверки Grapple Hook
@@ -174,25 +266,58 @@ local function grappleHookMonitor()
     if grappleCheckRunning then return end
     grappleCheckRunning = true
     
+    local lastPickupAttempt = 0
+    local PICKUP_COOLDOWN = 2 -- 2 секунды кулдаун между попытками подбора
+    
     while allFeaturesActive do
+        local currentTime = tick()
         hasGrappleHook = hasGrappleInHands() or hasGrappleInBackpack()
         
         if not hasGrappleHook then
-            -- Пытаемся найти и подобрать Grapple Hook
-            local grapple = findGrappleHookInWorkspace()
-            if grapple then
-                pickupGrappleHook(grapple)
+            -- Сначала проверяем инвентарь и экипируем
+            if hasGrappleInBackpack() then
+                equipGrappleFromBackpack()
             else
-                -- Ищем в других местах
-                for _, playerObj in ipairs(Players:GetPlayers()) do
-                    if playerObj ~= player and playerObj.Character then
-                        local theirGrapple = playerObj.Character:FindFirstChild("Grapple Hook")
-                        if theirGrapple then
-                            -- Можно добавить логику для "заимствования" у других игроков
-                            -- но это может быть воспринято как грифинг
+                -- Ищем в мире, но с кулдауном
+                if currentTime - lastPickupAttempt > PICKUP_COOLDOWN then
+                    local grapple = findGrappleHookInWorkspace()
+                    if grapple then
+                        pickupGrappleHook(grapple)
+                        lastPickupAttempt = currentTime
+                    else
+                        -- Расширенный поиск с другими названиями
+                        for _, item in ipairs(workspace:GetDescendants()) do
+                            if (item:IsA("Tool") or item:IsA("Part")) and 
+                               (string.find(item.Name:lower(), "hook") or 
+                                string.find(item.Name:lower(), "grapple") or
+                                string.find(item.Name:lower(), "rope")) then
+                                
+                                local isOwned = false
+                                for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                                    if otherPlayer.Character and item:IsDescendantOf(otherPlayer.Character) then
+                                        isOwned = true
+                                        break
+                                    end
+                                    if otherPlayer.Backpack and item:IsDescendantOf(otherPlayer.Backpack) then
+                                        isOwned = true
+                                        break
+                                    end
+                                end
+                                
+                                if not isOwned then
+                                    pickupGrappleHook(item)
+                                    lastPickupAttempt = currentTime
+                                    break
+                                end
+                            end
                         end
                     end
                 end
+            end
+        else
+            -- Если есть в инвентаре но не в руках - экипируем
+            if hasGrappleInBackpack() and not hasGrappleInHands() then
+                equipGrappleFromBackpack()
             end
         end
         
@@ -202,6 +327,8 @@ local function grappleHookMonitor()
     
     grappleCheckRunning = false
 end
+
+-- Остальной код остается таким же...
 
 -- Функция для плавного перемещения
 local function updateFramePosition(input)
@@ -424,10 +551,11 @@ task.spawn(velocityControl)
 player.CharacterAdded:Connect(function(newChar)
     character = newChar
     humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+    humanoid = newChar:WaitForChild("Humanoid")
     
     -- Перезапускаем мониторинг если фичи активны
     if allFeaturesActive then
-        wait(1) -- Даем время персонажу заспавниться
+        wait(2) -- Даем время персонажу заспавниться
         task.spawn(grappleHookMonitor)
     end
 end)
