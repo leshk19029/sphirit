@@ -199,6 +199,8 @@ ConfigSystem.functionStates = {
     FPSDevouver = false,
     InvisibilitySteal = false,
     WebControl = false,
+    GrappleSpeed = false,
+    GrappleSpeedValue = 140,
 }
 
 -- Функция сохранения конфигурации
@@ -212,6 +214,8 @@ function ConfigSystem:SaveConfig()
         FPSDevouver = self.functionStates.FPSDevouver,
         InvisibilitySteal = self.functionStates.InvisibilitySteal,
         WebControl = self.functionStates.WebControl,
+        GrappleSpeed = self.functionStates.GrappleSpeed,
+        GrappleSpeedValue = self.functionStates.GrappleSpeedValue,
     }
 
     local json = game:GetService('HttpService'):JSONEncode(configData)
@@ -253,6 +257,327 @@ end
 -- Загружаем конфигурацию при старте
 ConfigSystem:LoadConfig()
 
+-- ===== СИСТЕМА GRAPPLE SPEED ===== --
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Оптимизированные переменные
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
+
+-- Создание интерфейса Grapple Speed
+local GrappleScreenGui = Instance.new("ScreenGui")
+GrappleScreenGui.Name = "GreyGooUltraPro"
+GrappleScreenGui.ResetOnSpawn = false
+GrappleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+GrappleScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Основной контейнер
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 200, 0, 80)
+MainFrame.Position = UDim2.new(0, 10, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- Заголовок
+local Title = Instance.new("TextLabel")
+Title.Text = "Grapple Speed (Q)"
+Title.Size = UDim2.new(1, 0, 0, 20)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(200, 200, 200)
+Title.Font = Enum.Font.GothamMedium
+Title.TextSize = 12
+Title.TextXAlignment = Enum.TextXAlignment.Center
+
+-- Кнопка управления
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0.9, 0, 0, 25)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.3, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ToggleButton.Text = "OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(220, 220, 220)
+ToggleButton.Font = Enum.Font.Gotham
+ToggleButton.TextSize = 11
+ToggleButton.AutoButtonColor = false
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 4)
+ButtonCorner.Parent = ToggleButton
+
+-- Поле ввода скорости
+local SpeedInput = Instance.new("TextBox")
+SpeedInput.Size = UDim2.new(0.9, 0, 0, 20)
+SpeedInput.Position = UDim2.new(0.05, 0, 0.65, 0)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+SpeedInput.BorderSizePixel = 0
+SpeedInput.Text = tostring(ConfigSystem.functionStates.GrappleSpeedValue)
+SpeedInput.TextColor3 = Color3.fromRGB(220, 220, 220)
+SpeedInput.Font = Enum.Font.Gotham
+SpeedInput.TextSize = 11
+SpeedInput.PlaceholderText = "Speed"
+SpeedInput.ClearTextOnFocus = false
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = SpeedInput
+
+-- Иерархия объектов
+Title.Parent = MainFrame
+ToggleButton.Parent = MainFrame
+SpeedInput.Parent = MainFrame
+MainFrame.Parent = GrappleScreenGui
+
+-- Настройки
+local MAX_SPEED = 190
+local MIN_SPEED = 16
+local currentSpeed = ConfigSystem.functionStates.GrappleSpeedValue
+local allFeaturesActive = ConfigSystem.functionStates.GrappleSpeed
+local isDragging = false
+local dragStart
+local startPos
+
+-- Функция для плавного перемещения
+local function updateFramePosition(input)
+    if not isDragging then return end
+    
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+-- Обработчики перемещения для ПК
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isDragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
+        updateFramePosition(input)
+    end
+end)
+
+-- Обработчики для мобильных устройств
+local function startMobileDrag(input)
+    isDragging = true
+    dragStart = input.Position
+    startPos = MainFrame.Position
+end
+
+local function endMobileDrag()
+    isDragging = false
+end
+
+local function updateMobileDrag(input)
+    if isDragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end
+
+-- Обработчики тапов для мобильных устройств
+MainFrame.TouchLongPress:Connect(startMobileDrag)
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        startMobileDrag(input)
+    end
+end)
+
+UserInputService.TouchMoved:Connect(updateMobileDrag)
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch and isDragging then
+        updateMobileDrag(input)
+    end
+end)
+
+UserInputService.TouchEnded:Connect(endMobileDrag)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        endMobileDrag()
+    end
+end)
+
+-- Функция для эмуляции нажатий на телефонах
+local function emulatePhoneTaps()
+    while allFeaturesActive do
+        local phones = {}
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Part") or obj:IsA("MeshPart") then
+                local nameLower = obj.Name:lower()
+                if nameLower:find("phone") or nameLower:find("mobile") or nameLower:find("cell") then
+                    table.insert(phones, obj)
+                end
+            end
+        end
+        
+        for _, phone in ipairs(phones) do
+            if not allFeaturesActive then break end
+            
+            local touchEvent = Instance.new("TouchTransmitter")
+            touchEvent.Parent = phone
+            
+            task.wait(0.01)
+        end
+        
+        if allFeaturesActive then
+            task.wait(5)
+        end
+    end
+end
+
+-- Улучшенный спам
+local function improvedSpam()
+    local BURST_COUNT = 80
+    local DELAY_BETWEEN_BURSTS = 2.86
+    local DELAY_BETWEEN_SHOTS = 0.035
+    
+    task.spawn(emulatePhoneTaps)
+    
+    while allFeaturesActive do
+        for i = 1, BURST_COUNT do
+            if not allFeaturesActive then break end
+            
+            Event:FireServer(0.1780485312144)
+            
+            local targetTime = os.clock() + DELAY_BETWEEN_SHOTS
+            while os.clock() < targetTime and allFeaturesActive do
+                RunService.Heartbeat:Wait()
+            end
+        end
+        
+        if allFeaturesActive then
+            local waitEnd = os.clock() + DELAY_BETWEEN_BURSTS
+            while os.clock() < waitEnd and allFeaturesActive do
+                RunService.Heartbeat:Wait()
+            end
+        end
+    end
+end
+
+-- Система движения
+local function velocityControl()
+    while true do
+        if allFeaturesActive and character and humanoidRootPart then
+            local camera = workspace.CurrentCamera
+            local moveDirection = Vector3.new()
+            
+            local effectiveSpeed = currentSpeed
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDirection = moveDirection + camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDirection = moveDirection - camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDirection = moveDirection - camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDirection = moveDirection + camera.CFrame.RightVector
+            end
+            
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit
+                humanoidRootPart.Velocity = Vector3.new(moveDirection.X * effectiveSpeed, humanoidRootPart.Velocity.Y, moveDirection.Z * effectiveSpeed)
+            end
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Обновление скорости из текстового поля
+local function updateSpeedFromInput()
+    local inputText = SpeedInput.Text
+    local newSpeed = tonumber(inputText)
+    
+    if newSpeed then
+        newSpeed = math.clamp(newSpeed, MIN_SPEED, MAX_SPEED)
+        currentSpeed = newSpeed
+        SpeedInput.Text = tostring(math.floor(newSpeed))
+        ConfigSystem:UpdateState("GrappleSpeedValue", newSpeed)
+    else
+        SpeedInput.Text = tostring(currentSpeed)
+    end
+end
+
+-- Главная функция управления
+local function toggleAllFeatures()
+    allFeaturesActive = not allFeaturesActive
+    
+    if allFeaturesActive then
+        ToggleButton.Text = "ON"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+        task.spawn(improvedSpam)
+    else
+        ToggleButton.Text = "OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        if character and humanoidRootPart then
+            humanoidRootPart.Velocity = Vector3.new(0, humanoidRootPart.Velocity.Y, 0)
+        end
+    end
+    
+    ConfigSystem:UpdateState("GrappleSpeed", allFeaturesActive)
+end
+
+-- Обработчики событий
+SpeedInput.FocusLost:Connect(updateSpeedFromInput)
+
+ToggleButton.MouseButton1Click:Connect(toggleAllFeatures)
+
+-- Поддержка Touch для мобильных устройств
+ToggleButton.TouchTap:Connect(toggleAllFeatures)
+
+-- Бинд на Q для включения/выключения
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Q then
+        toggleAllFeatures()
+    end
+end)
+
+-- Запуск системы движения
+task.spawn(velocityControl)
+
+-- Авто-восстановление
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+end)
+
+-- Очистка при респавне
+game:GetService("StarterGui"):SetCore("ResetButtonCallback", function()
+    GrappleScreenGui:Destroy()
+end)
+
+-- Инициализация состояния Grapple Speed
+if allFeaturesActive then
+    ToggleButton.Text = "ON"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+else
+    ToggleButton.Text = "OFF"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+end
+updateSpeedFromInput()
+
+-- ===== ОСНОВНОЙ ИНТЕРФЕЙС SNOWHUB ===== --
 -- Создаем универсальный кружок для всех устройств
 local UIS = game:GetService('UserInputService')
 local TweenService = game:GetService('TweenService')
