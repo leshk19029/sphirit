@@ -272,7 +272,7 @@ local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
 local MAX_SPEED = 190
 local MIN_SPEED = 16
 local currentSpeed = ConfigSystem.functionStates.GrappleSpeedValue
-local grappleSpeedActive = ConfigSystem.functionStates.GrappleSpeed
+local grappleSpeedActive = false -- Теперь управляется через меню
 local hasGrappleHook = false
 local grappleCheckRunning = false
 local lastGrappleCheck = 0
@@ -293,6 +293,7 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
+MainFrame.Visible = ConfigSystem.functionStates.GrappleSpeed -- Видимость зависит от конфига
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
@@ -691,8 +692,17 @@ local function toggleGrappleSpeed()
             humanoidRootPart.Velocity = Vector3.new(0, humanoidRootPart.Velocity.Y, 0)
         end
     end
+end
+
+-- Функция управления видимостью меню Grapple Speed
+local function toggleGrappleSpeedMenuVisibility(isVisible)
+    MainFrame.Visible = isVisible
+    ConfigSystem:UpdateState("GrappleSpeed", isVisible)
     
-    ConfigSystem:UpdateState("GrappleSpeed", grappleSpeedActive)
+    -- Если меню скрывается, выключаем Grapple Speed
+    if not isVisible and grappleSpeedActive then
+        toggleGrappleSpeed()
+    end
 end
 
 -- Обработчики событий для Grapple Speed UI
@@ -1332,15 +1342,14 @@ if Window then
         end
     )
 
-    -- Добавляем Grapple Speed в основное меню
+    -- Добавляем Grapple Speed в основное меню - теперь управляет видимостью меню
     local GrappleSpeedToggle = createElementWithSave(
         MainSection,
         'Toggle',
-        'Grapple Speed',
+        'Grapple Speed Menu',
         { default = ConfigSystem.functionStates.GrappleSpeed },
         function(state)
-            toggleGrappleSpeed()
-            ConfigSystem:UpdateState('GrappleSpeed', state)
+            toggleGrappleSpeedMenuVisibility(state)
         end
     )
 
@@ -1473,10 +1482,13 @@ if Window then
             end
         end
 
-        -- Восстанавливаем Grapple Speed состояние
+        -- Восстанавливаем видимость меню Grapple Speed
         if ConfigSystem.functionStates.GrappleSpeed then
-            toggleGrappleSpeed()
+            toggleGrappleSpeedMenuVisibility(true)
             GrappleSpeedToggle:SetState(true)
+        else
+            toggleGrappleSpeedMenuVisibility(false)
+            GrappleSpeedToggle:SetState(false)
         end
     end
 
