@@ -201,7 +201,6 @@ ConfigSystem.functionStates = {
     WebControl = false,
     GrappleSpeed = false,
     GrappleSpeedValue = 140,
-    GrappleSlot = 1,
 }
 
 -- Функция сохранения конфигурации
@@ -217,7 +216,6 @@ function ConfigSystem:SaveConfig()
         WebControl = self.functionStates.WebControl,
         GrappleSpeed = self.functionStates.GrappleSpeed,
         GrappleSpeedValue = self.functionStates.GrappleSpeedValue,
-        GrappleSlot = self.functionStates.GrappleSlot,
     }
 
     local json = game:GetService('HttpService'):JSONEncode(configData)
@@ -263,7 +261,6 @@ ConfigSystem:LoadConfig()
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 -- Переменные для Grapple Speed
 local character = player.Character or player.CharacterAdded:Wait()
@@ -276,22 +273,21 @@ local MAX_SPEED = 190
 local MIN_SPEED = 16
 local currentSpeed = ConfigSystem.functionStates.GrappleSpeedValue
 local grappleSpeedActive = ConfigSystem.functionStates.GrappleSpeed
-local selectedSlot = ConfigSystem.functionStates.GrappleSlot
 local hasGrappleHook = false
 local grappleCheckRunning = false
 local lastGrappleCheck = 0
-local GRAPPLE_CHECK_COOLDOWN = 1
+local GRAPPLE_CHECK_COOLDOWN = 0.1 -- Быстрая проверка каждые 0.1 секунды
 
--- Создание интерфейса Grapple Speed
-local GrappleScreenGui = Instance.new("ScreenGui")
-GrappleScreenGui.Name = "GreyGooUltraPro"
-GrappleScreenGui.ResetOnSpawn = false
-GrappleScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-GrappleScreenGui.Parent = player:WaitForChild("PlayerGui")
+-- Создание интерфейса Grapple Speed (точь-в-точь как в оригинале)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GreyGooUltraPro"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
 
 -- Основной контейнер
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 120)
+MainFrame.Size = UDim2.new(0, 200, 0, 80)
 MainFrame.Position = UDim2.new(0, 10, 0, 10)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BackgroundTransparency = 0.1
@@ -315,8 +311,8 @@ Title.TextXAlignment = Enum.TextXAlignment.Center
 
 -- Кнопка управления
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0.4, 0, 0, 25)
-ToggleButton.Position = UDim2.new(0.05, 0, 0.25, 0)
+ToggleButton.Size = UDim2.new(0.9, 0, 0, 25)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.3, 0)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ToggleButton.Text = "OFF"
 ToggleButton.TextColor3 = Color3.fromRGB(220, 220, 220)
@@ -330,8 +326,8 @@ ButtonCorner.Parent = ToggleButton
 
 -- Поле ввода скорости
 local SpeedInput = Instance.new("TextBox")
-SpeedInput.Size = UDim2.new(0.4, 0, 0, 20)
-SpeedInput.Position = UDim2.new(0.55, 0, 0.25, 0)
+SpeedInput.Size = UDim2.new(0.9, 0, 0, 20)
+SpeedInput.Position = UDim2.new(0.05, 0, 0.65, 0)
 SpeedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 SpeedInput.BorderSizePixel = 0
 SpeedInput.Text = tostring(currentSpeed)
@@ -345,52 +341,11 @@ local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 4)
 InputCorner.Parent = SpeedInput
 
--- Выбор слота
-local SlotLabel = Instance.new("TextLabel")
-SlotLabel.Text = "Slot:"
-SlotLabel.Size = UDim2.new(0.2, 0, 0, 20)
-SlotLabel.Position = UDim2.new(0.05, 0, 0.55, 0)
-SlotLabel.BackgroundTransparency = 1
-SlotLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-SlotLabel.Font = Enum.Font.Gotham
-SlotLabel.TextSize = 11
-SlotLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local SlotInput = Instance.new("TextBox")
-SlotInput.Size = UDim2.new(0.2, 0, 0, 20)
-SlotInput.Position = UDim2.new(0.3, 0, 0.55, 0)
-SlotInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-SlotInput.BorderSizePixel = 0
-SlotInput.Text = tostring(selectedSlot)
-SlotInput.TextColor3 = Color3.fromRGB(220, 220, 220)
-SlotInput.Font = Enum.Font.Gotham
-SlotInput.TextSize = 11
-SlotInput.PlaceholderText = "1-9"
-SlotInput.ClearTextOnFocus = false
-
-local SlotCorner = Instance.new("UICorner")
-SlotCorner.CornerRadius = UDim.new(0, 4)
-SlotCorner.Parent = SlotInput
-
--- Индикатор Grapple Hook
-local GrappleIndicator = Instance.new("TextLabel")
-GrappleIndicator.Size = UDim2.new(0.9, 0, 0, 20)
-GrappleIndicator.Position = UDim2.new(0.05, 0, 0.8, 0)
-GrappleIndicator.BackgroundTransparency = 1
-GrappleIndicator.Text = "Grapple: ❌"
-GrappleIndicator.TextColor3 = Color3.fromRGB(255, 50, 50)
-GrappleIndicator.Font = Enum.Font.Gotham
-GrappleIndicator.TextSize = 10
-GrappleIndicator.TextXAlignment = Enum.TextXAlignment.Left
-
 -- Иерархия объектов
 Title.Parent = MainFrame
 ToggleButton.Parent = MainFrame
 SpeedInput.Parent = MainFrame
-SlotLabel.Parent = MainFrame
-SlotInput.Parent = MainFrame
-GrappleIndicator.Parent = MainFrame
-MainFrame.Parent = GrappleScreenGui
+MainFrame.Parent = ScreenGui
 
 -- Переменные для перемещения интерфейса
 local isDragging = false
@@ -451,25 +406,47 @@ local function hasGrappleInHands()
     return false, nil
 end
 
--- Функция проверки наличия Grapple Hook в определенном слоте
-local function hasGrappleInSlot(slot)
+-- Функция определения слота с Grapple Hook
+local function findGrappleSlot()
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
         local tools = backpack:GetChildren()
-        if tools[slot] and tools[slot]:IsA("Tool") then
-            local toolName = tools[slot].Name:lower()
-            if string.find(toolName, "grapple") or string.find(toolName, "hook") then
-                return true, tools[slot]
+        for slot, tool in ipairs(tools) do
+            if tool:IsA("Tool") and (tool.Name == "Grapple Hook" or string.find(tool.Name:lower(), "grapple")) then
+                return slot
             end
         end
     end
-    return false, nil
+    return nil
+end
+
+-- Функция нажатия цифровой клавиши для слота
+local function pressSlotKey(slot)
+    local keyCode
+    if slot == 1 then keyCode = Enum.KeyCode.One
+    elseif slot == 2 then keyCode = Enum.KeyCode.Two
+    elseif slot == 3 then keyCode = Enum.KeyCode.Three
+    elseif slot == 4 then keyCode = Enum.KeyCode.Four
+    elseif slot == 5 then keyCode = Enum.KeyCode.Five
+    elseif slot == 6 then keyCode = Enum.KeyCode.Six
+    elseif slot == 7 then keyCode = Enum.KeyCode.Seven
+    elseif slot == 8 then keyCode = Enum.KeyCode.Eight
+    elseif slot == 9 then keyCode = Enum.KeyCode.Nine
+    else return false
+    end
+    
+    -- Эмулируем нажатие клавиши
+    pcall(function()
+        virtualInput:SendKeyEvent(true, keyCode, false, nil)
+        wait(0.05)
+        virtualInput:SendKeyEvent(false, keyCode, false, nil)
+    end)
+    
+    return true
 end
 
 -- Улучшенная функция поиска Grapple Hook в workspace
 local function findGrappleHookInWorkspace()
-    local grappleHooks = {}
-    
     for _, item in ipairs(workspace:GetDescendants()) do
         local isGrappleLike = false
         local itemName = item.Name:lower()
@@ -508,25 +485,16 @@ local function findGrappleHookInWorkspace()
                 local distance = (position - humanoidRootPart.Position).Magnitude
                 
                 if distance <= 50 then
-                    table.insert(grappleHooks, {
-                        item = item,
-                        distance = distance,
-                        position = position
-                    })
+                    return item
                 end
             end
         end
     end
-    
-    table.sort(grappleHooks, function(a, b)
-        return a.distance < b.distance
-    end)
-    
-    return grappleHooks
+    return nil
 end
 
--- Функция подбора Grapple Hook в определенный слот
-local function pickupGrappleHookToSlot(grappleItem, targetSlot)
+-- Функция подбора Grapple Hook
+local function pickupGrappleHook(grappleItem)
     if not character or not humanoid then return false end
     
     local success = false
@@ -537,25 +505,10 @@ local function pickupGrappleHookToSlot(grappleItem, targetSlot)
         success = true
     end)
     
-    -- Метод 2: Для Tool - меняем родителя в нужный слот
+    -- Метод 2: Для Tool - меняем родителя
     if not success and grappleItem:IsA("Tool") then
         pcall(function()
-            -- Сначала кладем в инвентарь
             grappleItem.Parent = player.Backpack
-            
-            -- Ждем немного
-            wait(0.2)
-            
-            -- Перемещаем в нужный слот
-            local backpack = player:FindFirstChild("Backpack")
-            if backpack then
-                local tools = backpack:GetChildren()
-                if #tools >= targetSlot then
-                    -- Меняем порядок инструментов
-                    grappleItem.Parent = nil
-                    grappleItem.Parent = backpack
-                end
-            end
             success = true
         end)
     end
@@ -572,36 +525,10 @@ local function pickupGrappleHookToSlot(grappleItem, targetSlot)
         end
     end
     
-    if success then
-        wait(0.3)
-        local inSlot = hasGrappleInSlot(targetSlot)
-        local inHands = hasGrappleInHands()
-        local inBackpack = hasGrappleInBackpack()
-        
-        if inSlot or inHands or inBackpack then
-            GrappleIndicator.Text = "Grapple: ✅"
-            GrappleIndicator.TextColor3 = Color3.fromRGB(50, 255, 50)
-            return true
-        end
-    end
-    
-    return false
+    return success
 end
 
--- Функция экипировки Grapple Hook из определенного слота
-local function equipGrappleFromSlot(slot)
-    local hasGrapple, grappleTool = hasGrappleInSlot(slot)
-    if hasGrapple and grappleTool then
-        pcall(function()
-            grappleTool.Parent = character
-            wait(0.2)
-            return true
-        end)
-    end
-    return false
-end
-
--- Улучшенная система мониторинга Grapple Hook
+-- Улучшенная система мониторинга Grapple Hook с быстрой проверкой
 local function grappleHookMonitor()
     if grappleCheckRunning then return end
     grappleCheckRunning = true
@@ -612,57 +539,28 @@ local function grappleHookMonitor()
         if currentTime - lastGrappleCheck > GRAPPLE_CHECK_COOLDOWN then
             lastGrappleCheck = currentTime
             
-            local inHands, handTool = hasGrappleInHands()
-            local inSlot, slotTool = hasGrappleInSlot(selectedSlot)
+            local inHands = hasGrappleInHands()
             local inBackpack = hasGrappleInBackpack()
-            hasGrappleHook = inHands or inSlot or inBackpack
+            hasGrappleHook = inHands or inBackpack
             
             if hasGrappleHook then
-                GrappleIndicator.Text = "Grapple: ✅"
-                GrappleIndicator.TextColor3 = Color3.fromRGB(50, 255, 50)
-                
-                -- Если есть в слоте но не в руках - экипируем
-                if inSlot and not inHands then
-                    equipGrappleFromSlot(selectedSlot)
-                end
-                -- Если есть в инвентаре но не в нужном слоте и не в руках
-                if inBackpack and not inSlot and not inHands then
-                    -- Пытаемся найти в других слотах и экипировать
-                    for i = 1, 9 do
-                        local inOtherSlot = hasGrappleInSlot(i)
-                        if inOtherSlot then
-                            equipGrappleFromSlot(i)
-                            break
-                        end
+                -- Если есть в инвентаре но не в руках - находим слот и нажимаем цифру
+                if inBackpack and not inHands then
+                    local slot = findGrappleSlot()
+                    if slot then
+                        pressSlotKey(slot)
                     end
                 end
             else
-                GrappleIndicator.Text = "Grapple: ❌"
-                GrappleIndicator.TextColor3 = Color3.fromRGB(255, 50, 50)
-                
-                local grappleHooks = findGrappleHookInWorkspace()
-                if #grappleHooks > 0 then
-                    local closestGrapple = grappleHooks[1]
-                    local pickupSuccess = pickupGrappleHookToSlot(closestGrapple.item, selectedSlot)
-                    
-                    if not pickupSuccess and #grappleHooks > 1 then
-                        pickupGrappleHookToSlot(grappleHooks[2].item, selectedSlot)
-                    end
-                else
-                    for _, item in ipairs(workspace:GetDescendants()) do
-                        if item:IsA("Tool") and not item.Parent:IsA("Player") and not item.Parent:IsA("Model") then
-                            local itemName = item.Name:lower()
-                            if string.find(itemName, "tool") or string.find(itemName, "item") then
-                                pickupGrappleHookToSlot(item, selectedSlot)
-                                break
-                            end
-                        end
-                    end
+                -- Если нет Grapple Hook - ищем и подбираем
+                local grappleItem = findGrappleHookInWorkspace()
+                if grappleItem then
+                    pickupGrappleHook(grappleItem)
                 end
             end
         end
         
-        wait(0.5)
+        wait(GRAPPLE_CHECK_COOLDOWN) -- Быстрая проверка каждые 0.1 секунды
     end
     
     grappleCheckRunning = false
@@ -718,7 +616,7 @@ local function improvedSpam()
                 end
             end
         else
-            wait(0.5)
+            wait(0.1) -- Быстрое ожидание если нет Grapple Hook
         end
         
         if grappleSpeedActive then
@@ -776,21 +674,6 @@ local function updateSpeedFromInput()
     end
 end
 
--- Обновление слота из текстового поля
-local function updateSlotFromInput()
-    local inputText = SlotInput.Text
-    local newSlot = tonumber(inputText)
-    
-    if newSlot then
-        newSlot = math.clamp(newSlot, 1, 9)
-        selectedSlot = newSlot
-        SlotInput.Text = tostring(math.floor(newSlot))
-        ConfigSystem:UpdateState("GrappleSlot", newSlot)
-    else
-        SlotInput.Text = tostring(selectedSlot)
-    end
-end
-
 -- Функция управления Grapple Speed
 local function toggleGrappleSpeed()
     grappleSpeedActive = not grappleSpeedActive
@@ -814,8 +697,6 @@ end
 
 -- Обработчики событий для Grapple Speed UI
 SpeedInput.FocusLost:Connect(updateSpeedFromInput)
-SlotInput.FocusLost:Connect(updateSlotFromInput)
-
 ToggleButton.MouseButton1Click:Connect(toggleGrappleSpeed)
 
 -- Бинд на Q для включения/выключения
@@ -834,8 +715,6 @@ player.CharacterAdded:Connect(function(newChar)
     
     -- Сбрасываем состояние Grapple Hook
     hasGrappleHook = false
-    GrappleIndicator.Text = "Grapple: ❌"
-    GrappleIndicator.TextColor3 = Color3.fromRGB(255, 50, 50)
     
     -- Перезапускаем мониторинг если Grapple Speed активен
     if grappleSpeedActive then
@@ -851,14 +730,8 @@ task.spawn(velocityControl)
 task.spawn(function()
     wait(2)
     local inHands = hasGrappleInHands()
-    local inSlot = hasGrappleInSlot(selectedSlot)
     local inBackpack = hasGrappleInBackpack()
-    hasGrappleHook = inHands or inSlot or inBackpack
-    
-    if hasGrappleHook then
-        GrappleIndicator.Text = "Grapple: ✅"
-        GrappleIndicator.TextColor3 = Color3.fromRGB(50, 255, 50)
-    end
+    hasGrappleHook = inHands or inBackpack
     
     -- Обновляем состояние кнопки
     if grappleSpeedActive then
@@ -956,23 +829,23 @@ end
 IconFrame.Parent = MobileToggleButton
 
 -- Помещаем в CoreGui
-local ScreenGui = Instance.new('ScreenGui')
-ScreenGui.Name = 'SnowHubMobileUI'
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = game:GetService('CoreGui')
-MobileToggleButton.Parent = ScreenGui
+local HubScreenGui = Instance.new('ScreenGui')
+HubScreenGui.Name = 'SnowHubMobileUI'
+HubScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+HubScreenGui.ResetOnSpawn = false
+HubScreenGui.Parent = game:GetService('CoreGui')
+MobileToggleButton.Parent = HubScreenGui
 
 -- Переменная для отслеживания состояния меню
 local isMenuOpen = false
 local Window = nil
-local MainFrame = nil
+local HubMainFrame = nil
 
 -- Функция переключения меню
 local function toggleMenuVisibility()
-    if MainFrame then
+    if HubMainFrame then
         isMenuOpen = not isMenuOpen
-        MainFrame.Visible = isMenuOpen
+        HubMainFrame.Visible = isMenuOpen
 
         -- Анимация иконки
         if isMenuOpen then
@@ -1172,21 +1045,21 @@ if success then
 
     wait(0.5)
 
-    MainFrame = findMainFrame()
+    HubMainFrame = findMainFrame()
 
-    if MainFrame then
-        MainFrame.Visible = false
+    if HubMainFrame then
+        HubMainFrame.Visible = false
         isMenuOpen = false
     else
         warn(
             'Не удалось найти главный фрейм интерфейса!'
         )
-        MainFrame = Instance.new('Frame')
-        MainFrame.Size = UDim2.new(0, 700, 0, 500)
-        MainFrame.Position = UDim2.new(0.5, -350, 0.5, -250)
-        MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-        MainFrame.Visible = false
-        MainFrame.Parent = Window.Screengui
+        HubMainFrame = Instance.new('Frame')
+        HubMainFrame.Size = UDim2.new(0, 700, 0, 500)
+        HubMainFrame.Position = UDim2.new(0.5, -350, 0.5, -250)
+        HubMainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        HubMainFrame.Visible = false
+        HubMainFrame.Parent = Window.Screengui
     end
 else
     warn(
@@ -1459,6 +1332,18 @@ if Window then
         end
     )
 
+    -- Добавляем Grapple Speed в основное меню
+    local GrappleSpeedToggle = createElementWithSave(
+        MainSection,
+        'Toggle',
+        'Grapple Speed',
+        { default = ConfigSystem.functionStates.GrappleSpeed },
+        function(state)
+            toggleGrappleSpeed()
+            ConfigSystem:UpdateState('GrappleSpeed', state)
+        end
+    )
+
     -- Функция для сохранения позиции Web Control
     local function saveWebControlPosition()
         if webControlScreenGui and webControlScreenGui.Enabled then
@@ -1591,6 +1476,7 @@ if Window then
         -- Восстанавливаем Grapple Speed состояние
         if ConfigSystem.functionStates.GrappleSpeed then
             toggleGrappleSpeed()
+            GrappleSpeedToggle:SetState(true)
         end
     end
 
