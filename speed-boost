@@ -1346,7 +1346,7 @@ if Window then
     local GrappleSpeedToggle = createElementWithSave(
         MainSection,
         'Toggle',
-        'Grapple Speed Menu',
+        'Grapple Speed',
         { default = ConfigSystem.functionStates.GrappleSpeed },
         function(state)
             toggleGrappleSpeedMenuVisibility(state)
