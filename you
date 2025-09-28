@@ -289,7 +289,7 @@ local function smoothFlyToTarget(targetPosition)
         local distanceToTarget = (targetPosition - currentPosition).Magnitude
         
         -- Если достигли цели, устанавливаем Anchored
-        if distanceToTarget <= 2 then
+        if distanceToTarget <= 1 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
@@ -301,33 +301,19 @@ local function smoothFlyToTarget(targetPosition)
             return
         end
         
-        -- Умное вычисление скорости
+        -- Постоянная скорость 20
         local direction = (targetPosition - currentPosition).Unit
-        local speed
-        
-        if distanceToTarget > 50 then
-            -- Максимальная скорость для больших расстояний
-            speed = 20
-        elseif distanceToTarget > 20 then
-            -- Средняя скорость
-            speed = 20
-        elseif distanceToTarget > 10 then
-            -- Замедление при приближении
-            speed = distanceToTarget * 4
-        else
-            -- Точное позиционирование
-            speed = distanceToTarget * 3
-        end
+        local speed = 20
         
         -- Применяем скорость
         character.PrimaryPart.Velocity = direction * speed
         
-        -- Корректировка высоты
+        -- Точная корректировка высоты для точного приземления
         local heightDiff = targetPosition.Y - currentPosition.Y
-        if math.abs(heightDiff) > 1 then
+        if math.abs(heightDiff) > 0.5 then
             character.PrimaryPart.Velocity = Vector3.new(
                 character.PrimaryPart.Velocity.X,
-                heightDiff * 5,
+                heightDiff * 3,
                 character.PrimaryPart.Velocity.Z
             )
         end
