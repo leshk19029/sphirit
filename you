@@ -207,44 +207,53 @@ local function findNearestSpawn()
                 if spawn then
                     local spawnZ = spawn.Position.Z
                     
-                    -- ВСЕГДА выбираем ближайшую Z-координату из пары к текущей позиции игрока
-                    local targetZ = nil
+                    -- Находим пару координат для этого спавна
+                    local targetPair = nil
                     for _, pair in ipairs(zCoordinatePairs) do
                         local dist1 = math.abs(spawnZ - pair[1])
                         local dist2 = math.abs(spawnZ - pair[2])
                         
-                        -- Если Z спавна близко к одной из координат в паре
                         if dist1 < 10 or dist2 < 10 then
-                            -- ВСЕГДА выбираем ту Z-координату, которая ближе к текущей позиции игрока
-                            if math.abs(playerPosition.Z - pair[1]) < math.abs(playerPosition.Z - pair[2]) then
-                                targetZ = pair[1]
-                            else
-                                targetZ = pair[2]
-                            end
+                            targetPair = pair
                             break
                         end
                     end
                     
-                    local targetPosition
-                    if targetZ then
-                        targetPosition = Vector3.new(
+                    if targetPair then
+                        -- Проверяем обе координаты из пары и выбираем ближайшую
+                        local targetZ1 = targetPair[1]
+                        local targetZ2 = targetPair[2]
+                        
+                        local distanceToZ1 = math.abs(playerPosition.Z - targetZ1)
+                        local distanceToZ2 = math.abs(playerPosition.Z - targetZ2)
+                        
+                        -- Выбираем ближайшую Z-координату
+                        local finalTargetZ = distanceToZ1 < distanceToZ2 and targetZ1 or targetZ2
+                        
+                        local targetPosition = Vector3.new(
                             spawn.Position.X,
                             spawn.Position.Y - 3,
-                            targetZ
+                            finalTargetZ
                         )
+                        
+                        local distance = (playerPosition - targetPosition).Magnitude
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            nearestSpawn = targetPosition
+                        end
                     else
                         -- Если не нашли подходящую пару, используем оригинальную Z спавна
-                        targetPosition = Vector3.new(
+                        local targetPosition = Vector3.new(
                             spawn.Position.X,
                             spawn.Position.Y - 3,
                             spawn.Position.Z
                         )
-                    end
-                    
-                    local distance = (playerPosition - targetPosition).Magnitude
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        nearestSpawn = targetPosition
+                        
+                        local distance = (playerPosition - targetPosition).Magnitude
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            nearestSpawn = targetPosition
+                        end
                     end
                 end
             end
