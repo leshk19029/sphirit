@@ -1,0 +1,1080 @@
+-- Invisibility Steal Module (Standalone Mobile Optimized)
+local InvisibilitySteal = {}
+
+local Players = game:GetService('Players')
+local PhysicsService = game:GetService('PhysicsService')
+local RunService = game:GetService('RunService')
+local UserInputService = game:GetService('UserInputService')
+local TweenService = game:GetService('TweenService')
+local HttpService = game:GetService('HttpService')
+local LocalPlayer = Players.LocalPlayer
+
+local Backpack = LocalPlayer:WaitForChild('Backpack')
+local PlayerGui = LocalPlayer:WaitForChild('PlayerGui')
+
+-- Динамические переменные для персонажа
+local Character = nil
+local Humanoid = nil
+local HumanoidRootPart = nil
+
+-- Настройки
+local IS_ACTIVE = false
+local BASE_Y_OFFSET = -50
+local CAMERA_SENSITIVITY = 0.8
+local TOUCH_SENSITIVITY = 1.0
+local PINCH_SENSITIVITY = 0.01
+local originalPosition = Vector3.new(0, 0, 0)
+local CAMERA_HOLD_TIME = 0.35
+
+-- Константы для UI
+local PANEL_WIDTH = 200
+local PANEL_HEIGHT = 80
+local CORNER_RADIUS = 8
+local BTN_WIDTH = 180
+local BTN_HEIGHT = 25
+local BTN_RADIUS = 4
+local BTN_FONT_SIZE = 11
+
+-- Переменные для сохранения позиции
+local savedPosition = nil
+local positionKey = 'InvisibilityStealPosition_' .. LocalPlayer.UserId
+
+-- Переменные для клона и камеры
+local clonePart = nil
+local cameraController = nil
+local originalCameraType = nil
+local originalCameraSubject = nil
+local lastPlayerPosition = Vector3.new(0, 0, 0)
+local cameraAngle = Vector2.new(0, 0)
+local cameraDistance = 8
+local isDragging = false
+local currentTouchId = nil
+
+-- Мобильные переменные
+local IS_MOBILE = UserInputService.TouchEnabled
+local touchStartPositions = {}
+local initialPinchDistance = nil
+local isPinching = false
+
+-- Флаги для отслеживания подключенных событий
+local inputBeganConnection = nil
+local inputEndedConnection = nil
+local inputChangedConnection = nil
+local touchStartedConnection = nil
+local touchMovedConnection = nil
+local touchEndedConnection = nil
+local godModeHealthConnection = nil
+local godModeDiedConnection = nil
+local humanoidDiedConnection = nil
+local heartbeatConnection = nil
+local characterAddedConnection = nil
+local keyBindConnection = nil
+
+-- Переменные для блокировки быстрых кликов
+local isProcessing = false
+local PROCESSING_DELAY = 0.5
+
+-- Переменные для прыжка (уникальная функциональность нижнего скрипта)
+local isJumping = false
+local jumpStartTime = 0
+local JUMP_DURATION = 0.3
+local TELEPORT_AT_JUMP_HEIGHT = 0.6
+
+-- Переменные для UI
+local screenGui = nil
+local mainFrame = nil
+local mainBtn = nil
+local title = nil
+
+-- Настройки бинда
+local BIND_KEY = Enum.KeyCode.F
+local BIND_ENABLED = true
+
+-- Функция для получения текущего персонажа
+local function getCurrentCharacter()
+	return LocalPlayer.Character
+end
+
+-- Функция для получения текущего Humanoid
+local function getCurrentHumanoid()
+	local character = getCurrentCharacter()
+	if character then
+		return character:FindFirstChildOfClass('Humanoid')
+	end
+	return nil
+end
+
+-- Функция для получения текущего HumanoidRootPart
+local function getCurrentHumanoidRootPart()
+	local character = getCurrentCharacter()
+	if character then
+		return character:FindFirstChild('HumanoidRootPart')
+	end
+	return nil
+end
+
+-- Функция для обновления ссылок на персонажа
+local function updateCharacterReferences()
+	Character = getCurrentCharacter()
+	Humanoid = getCurrentHumanoid()
+	HumanoidRootPart = getCurrentHumanoidRootPart()
+
+	if HumanoidRootPart then
+		lastPlayerPosition = HumanoidRootPart.Position
+		originalPosition = HumanoidRootPart.Position
+	end
+end
+
+-- Загрузка сохраненной позиции
+local function loadSavedPosition()
+	local success, result = pcall(function()
+		if readfile and isfile and isfile(positionKey) then
+			return readfile(positionKey)
+		end
+		return nil
+	end)
+
+	if success and result then
+		local data = HttpService:JSONDecode(result)
+		savedPosition =
+			UDim2.new(data.X.Scale, data.X.Offset, data.Y.Scale, data.Y.Offset)
+		return true
+	end
+	return false
+end
+
+-- Сохранение позиции
+local function savePosition(position)
+	savedPosition = position
+	pcall(function()
+		if writefile then
+			local data = {
+				X = { Scale = position.X.Scale, Offset = position.X.Offset },
+				Y = { Scale = position.Y.Scale, Offset = position.Y.Offset },
+			}
+			writefile(positionKey, HttpService:JSONEncode(data))
+		end
+	end)
+end
+
+-- Функция для настройки перетаскивания
+local function setupDrag(frame)
+	local dragging = false
+	local dragInput, dragStart, startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		local newPosition = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+		frame.Position = newPosition
+		savePosition(newPosition)
+	end
+
+	frame.InputBegan:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+
+			local connection
+			connection = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+					connection:Disconnect()
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+end
+
+-- Загрузка чувствительности из настроек игры
+local function loadCameraSensitivityFromSettings()
+	local UserSettingsService = game:GetService('UserSettings')
+	local GameSettings = nil
+	local ok, err = pcall(function()
+		GameSettings = UserSettingsService:WaitForChild('GameSettings')
+	end)
+	if
+		ok
+		and GameSettings
+		and type(GameSettings.MouseSensitivity) == 'number'
+	then
+		CAMERA_SENSITIVITY = GameSettings.MouseSensitivity
+	end
+
+	if GameSettings then
+		GameSettings.Changed:Connect(function(prop)
+			if prop == 'MouseSensitivity' then
+				local ms = GameSettings.MouseSensitivity
+				if type(ms) == 'number' then
+					CAMERA_SENSITIVITY = ms
+				end
+			end
+		end)
+	end
+end
+
+-- Функция для полной очистки камеры
+local function cleanupCamera()
+	if cameraController then
+		cameraController:Disconnect()
+		cameraController = nil
+	end
+
+	if inputBeganConnection then
+		inputBeganConnection:Disconnect()
+		inputBeganConnection = nil
+	end
+	if inputEndedConnection then
+		inputEndedConnection:Disconnect()
+		inputEndedConnection = nil
+	end
+	if inputChangedConnection then
+		inputChangedConnection:Disconnect()
+		inputChangedConnection = nil
+	end
+	if touchStartedConnection then
+		touchStartedConnection:Disconnect()
+		touchStartedConnection = nil
+	end
+	if touchMovedConnection then
+		touchMovedConnection:Disconnect()
+		touchMovedConnection = nil
+	end
+	if touchEndedConnection then
+		touchEndedConnection:Disconnect()
+		touchEndedConnection = nil
+	end
+
+	isDragging = false
+	currentTouchId = nil
+	touchStartPositions = {}
+	initialPinchDistance = nil
+	isPinching = false
+end
+
+-- Функция для полной очистки клона
+local function cleanupClone()
+	if clonePart then
+		clonePart:Destroy()
+		clonePart = nil
+	end
+end
+
+-- Функция для создания клона HumanoidRootPart
+local function createClone()
+	cleanupClone()
+
+	if not HumanoidRootPart then
+		return
+	end
+
+	clonePart = Instance.new('Part')
+	clonePart.Name = 'InvisibilityClone'
+	clonePart.Size = Vector3.new(2, 2, 1)
+	clonePart.Shape = Enum.PartType.Block
+	clonePart.Color = Color3.fromRGB(190, 140, 220)
+	clonePart.Material = Enum.Material.Neon
+	clonePart.Transparency = 0.5
+	clonePart.CanCollide = false
+	clonePart.Anchored = true
+	clonePart.CastShadow = false
+
+	clonePart.Position = Vector3.new(
+		lastPlayerPosition.X,
+		lastPlayerPosition.Y,
+		lastPlayerPosition.Z
+	)
+
+	clonePart.Parent = workspace
+end
+
+-- Обработка ввода для ПК
+local function setupDesktopCameraInput()
+	inputBeganConnection = UserInputService.InputBegan:Connect(
+		function(input, gameProcessed)
+			if gameProcessed or not IS_ACTIVE or not clonePart then
+				return
+			end
+
+			if input.UserInputType == Enum.UserInputType.MouseButton2 then
+				isDragging = true
+				UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+			end
+		end
+	)
+
+	inputEndedConnection = UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			isDragging = false
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end
+	end)
+
+	inputChangedConnection = UserInputService.InputChanged:Connect(
+		function(input)
+			if not IS_ACTIVE or not clonePart then
+				return
+			end
+
+			if
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				and isDragging
+			then
+				local delta = input.Delta
+				cameraAngle = cameraAngle
+					+ Vector2.new(
+						delta.Y * CAMERA_SENSITIVITY * 0.01,
+						-delta.X * CAMERA_SENSITIVITY * 0.01
+					)
+				cameraAngle = Vector2.new(
+					math.clamp(cameraAngle.X, -math.rad(80), math.rad(80)),
+					cameraAngle.Y
+				)
+			end
+
+			if input.UserInputType == Enum.UserInputType.MouseWheel then
+				cameraDistance =
+					math.clamp(cameraDistance - input.Position.Z * 2, 2, 20)
+			end
+		end
+	)
+end
+
+-- Функция для улучшенного управления камерой на мобильных устройствах
+local function setupEnhancedMobileCamera()
+	cleanupCamera()
+
+	local touchStartPos = nil
+	local touchStartTime = nil
+	local isCameraDragging = false
+	local pinchTouches = {}
+
+	touchStartedConnection = UserInputService.TouchStarted:Connect(
+		function(touch)
+			if not IS_ACTIVE or not clonePart then
+				return
+			end
+
+			-- Проверяем, не касается ли UI панель
+			local touchPos = touch.Position
+			local framePos = mainFrame.AbsolutePosition
+			local frameSize = mainFrame.AbsoluteSize
+
+			local isTouchingUI = touchPos.X >= framePos.X
+				and touchPos.X <= framePos.X + frameSize.X
+				and touchPos.Y >= framePos.Y
+				and touchPos.Y <= framePos.Y + frameSize.Y
+
+			if not isTouchingUI then
+				touchStartPos = touch.Position
+				touchStartTime = os.clock()
+				isCameraDragging = true
+				currentTouchId = touch
+			end
+
+			-- Обработка масштабирования
+			table.insert(pinchTouches, touch)
+
+			if #pinchTouches == 2 then
+				local pos1 = pinchTouches[1].Position
+				local pos2 = pinchTouches[2].Position
+				initialPinchDistance = (pos1 - pos2).Magnitude
+			end
+		end
+	)
+
+	touchEndedConnection = UserInputService.TouchEnded:Connect(function(touch)
+		if touch == currentTouchId then
+			isCameraDragging = false
+			currentTouchId = nil
+			touchStartPos = nil
+		end
+
+		-- Очистка масштабирования
+		for i, t in ipairs(pinchTouches) do
+			if t == touch then
+				table.remove(pinchTouches, i)
+				break
+			end
+		end
+
+		if #pinchTouches < 2 then
+			initialPinchDistance = nil
+		end
+	end)
+
+	touchMovedConnection = UserInputService.TouchMoved:Connect(function(touch)
+		if not IS_ACTIVE or not clonePart then
+			return
+		end
+
+		-- Обработка вращения камеры
+		if isCameraDragging and touch == currentTouchId and touchStartPos then
+			local currentPos = touch.Position
+			local delta = currentPos - touchStartPos
+
+			-- Обновляем углы камеры
+			cameraAngle = cameraAngle
+				+ Vector2.new(
+					delta.Y * TOUCH_SENSITIVITY * 0.03,
+					-delta.X * TOUCH_SENSITIVITY * 0.03
+				)
+
+			-- Ограничиваем вертикальный угол
+			cameraAngle = Vector2.new(
+				math.clamp(cameraAngle.X, -math.rad(75), math.rad(75)),
+				cameraAngle.Y
+			)
+
+			touchStartPos = currentPos
+		end
+
+		-- Обработка масштабирования
+		if #pinchTouches >= 2 then
+			local pos1 = pinchTouches[1].Position
+			local pos2 = pinchTouches[2].Position
+			local currentDistance = (pos1 - pos2).Magnitude
+
+			if initialPinchDistance then
+				local scale = currentDistance / initialPinchDistance
+				cameraDistance = math.clamp(cameraDistance * (2 - scale), 2, 25)
+				initialPinchDistance = currentDistance
+			end
+		end
+	end)
+end
+
+-- Функция для настройки управления камерой
+local function setupCameraInput()
+	cleanupCamera()
+
+	if IS_MOBILE then
+		setupEnhancedMobileCamera()
+	else
+		setupDesktopCameraInput()
+	end
+end
+
+-- Функция для привязки камеры к клону
+local function attachCameraToClone()
+	if not clonePart then
+		return
+	end
+
+	originalCameraType = workspace.CurrentCamera.CameraType
+	originalCameraSubject = workspace.CurrentCamera.CameraSubject
+
+	workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+	setupCameraInput()
+
+	cameraController = RunService.RenderStepped:Connect(function()
+		if clonePart and clonePart.Parent and IS_ACTIVE then
+			-- Обновляем позицию камеры на основе угла и расстояния
+			local cameraPos = clonePart.Position
+				+ Vector3.new(
+					math.sin(cameraAngle.Y)
+						* math.cos(cameraAngle.X)
+						* cameraDistance,
+					math.sin(cameraAngle.X) * cameraDistance + 2,
+					math.cos(cameraAngle.Y)
+						* math.cos(cameraAngle.X)
+						* cameraDistance
+				)
+
+			workspace.CurrentCamera.CFrame =
+				CFrame.new(cameraPos, clonePart.Position + Vector3.new(0, 2, 0))
+		end
+	end)
+end
+
+-- Функция для восстановления оригинальной камеры
+local function restoreOriginalCamera()
+	cleanupCamera()
+
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera.CameraType = originalCameraType
+			or Enum.CameraType.Custom
+		if originalCameraSubject and originalCameraSubject.Parent then
+			workspace.CurrentCamera.CameraSubject = originalCameraSubject
+		else
+			local currentHumanoid = getCurrentHumanoid()
+			if currentHumanoid then
+				workspace.CurrentCamera.CameraSubject = currentHumanoid
+			end
+		end
+	end
+
+	UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+end
+
+-- Функция для обновления позиции клона
+local function updateClonePosition()
+	if not clonePart or not IS_ACTIVE then
+		return
+	end
+
+	local currentHRP = getCurrentHumanoidRootPart()
+	if not currentHRP then
+		return
+	end
+
+	local currentPos = currentHRP.Position
+	lastPlayerPosition = currentPos
+	clonePart.Position =
+		Vector3.new(currentPos.X, clonePart.Position.Y, currentPos.Z)
+
+	local lookVector = currentHRP.CFrame.LookVector
+	lookVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+	if lookVector.Magnitude > 0 then
+		clonePart.CFrame =
+			CFrame.new(clonePart.Position, clonePart.Position + lookVector)
+	end
+end
+
+-- Функция для остановки фиксации позиции
+local function cleanupPositionFix()
+	if heartbeatConnection then
+		heartbeatConnection:Disconnect()
+		heartbeatConnection = nil
+	end
+end
+
+-- Функция для запуска фиксации позиции
+local function setupPositionFix()
+	cleanupPositionFix()
+
+	heartbeatConnection = RunService.Heartbeat:Connect(function()
+		if IS_ACTIVE then
+			local currentHRP = getCurrentHumanoidRootPart()
+			if currentHRP then
+				currentHRP.CFrame = CFrame.new(originalPosition)
+				currentHRP.Velocity = Vector3.new(0, 0, 0)
+				currentHRP.RotVelocity = Vector3.new(0, 0, 0)
+				updateClonePosition()
+			end
+		end
+	end)
+end
+
+-- Функция для получения позиции телепортации
+local function getTeleportPosition(currentPosition)
+	local additionalOffset = 0
+	if currentPosition.Y > 0 then
+		additionalOffset = -currentPosition.Y
+	end
+	local totalYOffset = BASE_Y_OFFSET + additionalOffset
+	local x = currentPosition.X
+	local z = currentPosition.Z
+	local y = currentPosition.Y + totalYOffset
+	return Vector3.new(x, y, z)
+end
+
+-- Функция для выполнения прыжка (уникальная функциональность)
+local function performJump()
+	if not Humanoid then
+		return false
+	end
+
+	isJumping = true
+	jumpStartTime = os.clock()
+
+	-- Заставляем персонажа прыгнуть
+	Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	return true
+end
+
+-- Функция для телепортации
+local function teleportToPosition()
+	local currentHRP = getCurrentHumanoidRootPart()
+	if not currentHRP then
+		return
+	end
+
+	lastPlayerPosition = currentHRP.Position
+	local currentPosition = currentHRP.Position
+	local teleportPosition = getTeleportPosition(currentPosition)
+
+	local success, err = pcall(function()
+		currentHRP.CFrame = CFrame.new(teleportPosition)
+		currentHRP.Velocity = Vector3.new(0, 0, 0)
+		currentHRP.RotVelocity = Vector3.new(0, 0, 0)
+		originalPosition = teleportPosition
+	end)
+end
+
+-- Функция для возврата персонажа
+local function returnPlayerUp()
+	local currentHRP = getCurrentHumanoidRootPart()
+	if not currentHRP then
+		return
+	end
+
+	local currentPosition = currentHRP.Position
+	local returnPosition =
+		Vector3.new(currentPosition.X, currentPosition.Y + 2, currentPosition.Z)
+
+	local success, err = pcall(function()
+		currentHRP.CFrame = CFrame.new(returnPosition)
+		currentHRP.Velocity = Vector3.new(0, 0, 0)
+		currentHRP.RotVelocity = Vector3.new(0, 0, 0)
+	end)
+end
+
+-- Функция для активации God Mode
+local function enableGodMode()
+	local currentHumanoid = getCurrentHumanoid()
+	if not currentHumanoid then
+		return
+	end
+
+	if godModeHealthConnection then
+		godModeHealthConnection:Disconnect()
+		godModeHealthConnection = nil
+	end
+	if godModeDiedConnection then
+		godModeDiedConnection:Disconnect()
+		godModeDiedConnection = nil
+	end
+
+	currentHumanoid.MaxHealth = math.huge
+	currentHumanoid.Health = math.huge
+
+	godModeHealthConnection = currentHumanoid
+		:GetPropertyChangedSignal('Health')
+		:Connect(function()
+			if IS_ACTIVE then
+				currentHumanoid.Health = math.huge
+			end
+		end)
+
+	godModeDiedConnection = currentHumanoid.Died:Connect(function()
+		if IS_ACTIVE then
+			local newHumanoid = getCurrentHumanoid()
+			if newHumanoid then
+				newHumanoid.Health = math.huge
+			end
+		end
+	end)
+end
+
+-- Функция для деактивации God Mode
+local function disableGodMode()
+	if godModeHealthConnection then
+		godModeHealthConnection:Disconnect()
+		godModeHealthConnection = nil
+	end
+	if godModeDiedConnection then
+		godModeDiedConnection:Disconnect()
+		godModeDiedConnection = nil
+	end
+
+	local currentHumanoid = getCurrentHumanoid()
+	if currentHumanoid then
+		currentHumanoid.MaxHealth = 100
+		currentHumanoid.Health = 100
+	end
+end
+
+-- Функция для обработки смерти персонажа
+local function onHumanoidDied()
+	if IS_ACTIVE then
+		IS_ACTIVE = false
+		isJumping = false
+
+		cleanupCamera()
+		cleanupClone()
+		cleanupPositionFix()
+		disableGodMode()
+		restoreOriginalCamera()
+
+		if mainBtn then
+			mainBtn.Text = 'OFF'
+			mainBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		end
+	end
+end
+
+-- Функция для отслеживания смерти персонажа
+local function setupDeathTracking()
+	if humanoidDiedConnection then
+		humanoidDiedConnection:Disconnect()
+		humanoidDiedConnection = nil
+	end
+
+	local currentHumanoid = getCurrentHumanoid()
+	if currentHumanoid then
+		humanoidDiedConnection = currentHumanoid.Died:Connect(onHumanoidDied)
+	end
+end
+
+-- Основная функция для переключения состояния (с прыжком)
+local function setActive(state)
+	if isProcessing then
+		return
+	end
+	isProcessing = true
+
+	updateCharacterReferences()
+
+	if state then
+		-- Включение: сначала прыжок, потом телепортация и активация
+		if performJump() then
+			-- Ждем немного перед телепортацией (в середине прыжка)
+			task.delay(JUMP_DURATION * TELEPORT_AT_JUMP_HEIGHT, function()
+				if not isJumping then
+					return
+				end
+
+				local currentHRP = getCurrentHumanoidRootPart()
+				if currentHRP then
+					cleanupCamera()
+					cleanupClone()
+					cleanupPositionFix()
+
+					teleportToPosition()
+					createClone()
+					attachCameraToClone()
+					enableGodMode()
+					setupDeathTracking()
+					setupPositionFix()
+
+					IS_ACTIVE = true
+
+					if mainBtn then
+						mainBtn.Text = 'ON'
+						mainBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+					end
+				else
+					IS_ACTIVE = false
+				end
+
+				isJumping = false
+				isProcessing = false
+			end)
+
+			-- Таймаут на случай, если прыжок не сработал
+			task.delay(JUMP_DURATION + 0.5, function()
+				isJumping = false
+				if not IS_ACTIVE then
+					isProcessing = false
+				end
+			end)
+		else
+			isProcessing = false
+		end
+	else
+		-- Выключение: просто возвращаем персонажа
+		IS_ACTIVE = false
+		isJumping = false
+
+		returnPlayerUp()
+		disableGodMode()
+		cleanupPositionFix()
+
+		task.delay(CAMERA_HOLD_TIME, function()
+			if not IS_ACTIVE then
+				restoreOriginalCamera()
+				cleanupClone()
+				cleanupCamera()
+			end
+		end)
+
+		if mainBtn then
+			mainBtn.Text = 'OFF'
+			mainBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		end
+
+		task.delay(PROCESSING_DELAY, function()
+			isProcessing = false
+		end)
+	end
+end
+
+-- Функция для переключения состояния по бинду
+local function toggleByBind()
+	if not isProcessing then
+		setActive(not IS_ACTIVE)
+		if mainBtn then
+			mainBtn.Text = IS_ACTIVE and 'ON' or 'OFF'
+			mainBtn.BackgroundColor3 = IS_ACTIVE and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(45, 45, 45)
+		end
+	end
+end
+
+-- Настройка бинда клавиши
+local function setupKeyBind()
+	if keyBindConnection then
+		keyBindConnection:Disconnect()
+		keyBindConnection = nil
+	end
+
+	keyBindConnection = UserInputService.InputBegan:Connect(
+		function(input, gameProcessed)
+			if gameProcessed then
+				return
+			end
+
+			if input.KeyCode == BIND_KEY and BIND_ENABLED then
+				toggleByBind()
+			end
+		end
+	)
+end
+
+-- Функция для изменения бинда
+local function setKeyBind(newKey)
+	BIND_KEY = newKey
+	setupKeyBind()
+end
+
+-- Функция для включения/выключения бинда
+local function setBindEnabled(enabled)
+	BIND_ENABLED = enabled
+end
+
+-- Создание UI в стиле нижнего скрипта
+local function createUI()
+	if screenGui then
+		screenGui:Destroy()
+	end
+
+	screenGui = Instance.new('ScreenGui')
+	screenGui.Name = 'InvisibilityStealPro'
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = PlayerGui
+
+	-- Основной контейнер
+	mainFrame = Instance.new('Frame')
+	mainFrame.Size = UDim2.new(0, PANEL_WIDTH, 0, PANEL_HEIGHT)
+
+	if savedPosition then
+		mainFrame.Position = savedPosition
+	else
+		mainFrame.Position = UDim2.new(0, 10, 0, 10)
+	end
+
+	mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	mainFrame.BackgroundTransparency = 0.1
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Active = true
+
+	local UICorner = Instance.new('UICorner')
+	UICorner.CornerRadius = UDim.new(0, CORNER_RADIUS)
+	UICorner.Parent = mainFrame
+
+	-- Заголовок
+	title = Instance.new('TextLabel')
+	title.Text = 'Invisibility (' .. BIND_KEY.Name .. ')'
+	title.Size = UDim2.new(1, 0, 0, 20)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.TextColor3 = Color3.fromRGB(200, 200, 200)
+	title.Font = Enum.Font.GothamMedium
+	title.TextSize = 12
+	title.TextXAlignment = Enum.TextXAlignment.Center
+
+	-- Кнопка управления
+	mainBtn = Instance.new('TextButton')
+	mainBtn.Size = UDim2.new(0.9, 0, 0, BTN_HEIGHT)
+	mainBtn.Position = UDim2.new(0.05, 0, 0.3, 0)
+	mainBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	mainBtn.Text = 'OFF'
+	mainBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+	mainBtn.Font = Enum.Font.Gotham
+	mainBtn.TextSize = 11
+	mainBtn.AutoButtonColor = false
+
+	local ButtonCorner = Instance.new('UICorner')
+	ButtonCorner.CornerRadius = UDim.new(0, BTN_RADIUS)
+	ButtonCorner.Parent = mainBtn
+
+	-- Иерархия объектов
+	title.Parent = mainFrame
+	mainBtn.Parent = mainFrame
+	mainFrame.Parent = screenGui
+
+	-- Настройка перетаскивания
+	setupDrag(mainFrame)
+
+	-- Обработчики событий
+	mainBtn.MouseButton1Click:Connect(function()
+		if not isProcessing then
+			setActive(not IS_ACTIVE)
+			mainBtn.Text = IS_ACTIVE and 'ON' or 'OFF'
+			mainBtn.BackgroundColor3 = IS_ACTIVE and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(45, 45, 45)
+		end
+	end)
+
+	-- Поддержка Touch для мобильных устройств
+	mainBtn.TouchTap:Connect(function()
+		if not isProcessing then
+			setActive(not IS_ACTIVE)
+			mainBtn.Text = IS_ACTIVE and 'ON' or 'OFF'
+			mainBtn.BackgroundColor3 = IS_ACTIVE and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(45, 45, 45)
+		end
+	end)
+end
+
+-- Обработчик респауна
+local function onCharacterAdded(newCharacter)
+	updateCharacterReferences()
+	setupDeathTracking()
+
+	if IS_ACTIVE then
+		IS_ACTIVE = false
+		isJumping = false
+		cleanupCamera()
+		cleanupClone()
+		cleanupPositionFix()
+		disableGodMode()
+		restoreOriginalCamera()
+
+		if mainBtn then
+			mainBtn.Text = 'OFF'
+			mainBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		end
+	end
+end
+
+-- Инициализация при запуске
+local function initialize()
+	updateCharacterReferences()
+	setupDeathTracking()
+	setupKeyBind()
+	
+	characterAddedConnection =
+		LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+end
+
+initialize()
+
+-- Очистка при выходе
+game:GetService('Players').PlayerRemoving:Connect(function(player)
+	if player == LocalPlayer then
+		if characterAddedConnection then
+			characterAddedConnection:Disconnect()
+		end
+		if keyBindConnection then
+			keyBindConnection:Disconnect()
+		end
+		cleanupCamera()
+		cleanupClone()
+		cleanupPositionFix()
+		disableGodMode()
+		restoreOriginalCamera()
+		if screenGui then
+			screenGui:Destroy()
+		end
+	end
+end)
+
+-- Автоматическое создание UI при запуске
+loadSavedPosition()
+createUI()
+setupKeyBind()
+
+-- Методы модуля
+function InvisibilitySteal:Enable()
+	if not IS_ACTIVE and not isProcessing then
+		loadCameraSensitivityFromSettings()
+		loadSavedPosition()
+		createUI()
+		setupKeyBind()
+		setActive(true)
+		if mainBtn then
+			mainBtn.Text = 'ON'
+			mainBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+		end
+	end
+end
+
+function InvisibilitySteal:Disable()
+	if IS_ACTIVE and not isProcessing then
+		setActive(false)
+		if mainBtn then
+			mainBtn.Text = 'OFF'
+			mainBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		end
+		if screenGui then
+			screenGui:Destroy()
+			screenGui = nil
+		end
+	end
+end
+
+function InvisibilitySteal:ShowUI()
+	if screenGui then
+		screenGui.Enabled = true
+	else
+		createUI()
+		setupKeyBind()
+	end
+end
+
+function InvisibilitySteal:HideUI()
+	if screenGui then
+		screenGui.Enabled = false
+	end
+end
+
+function InvisibilitySteal:ToggleUI(state)
+	if state then
+		self:ShowUI()
+	else
+		self:HideUI()
+	end
+end
+
+function InvisibilitySteal:Toggle(state)
+	if state then
+		self:Enable()
+	else
+		self:Disable()
+	end
+end
+
+-- Методы для управления биндом
+function InvisibilitySteal:SetKeyBind(newKey)
+	setKeyBind(newKey)
+	if title then
+		title.Text = 'Invisibility (' .. newKey.Name .. ')'
+	end
+end
+
+function InvisibilitySteal:SetBindEnabled(enabled)
+	setBindEnabled(enabled)
+end
+
+function InvisibilitySteal:GetCurrentBind()
+	return BIND_KEY
+end
+
+function InvisibilitySteal:IsBindEnabled()
+	return BIND_ENABLED
+end
+
+return InvisibilitySteal
