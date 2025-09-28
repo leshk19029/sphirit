@@ -17,11 +17,6 @@ local flightEnabled = false
 local originalProperties = {} -- Таблица для хранения исходных свойств
 local originalAnchoredState = false -- Сохраняем исходное состояние Anchored
 
--- Переменные для управления полетом
-local flySpeed = 50 -- Скорость полета
-local isFlying = false
-local bodyVelocity = nil
-
 -- Создаем интерфейс
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FlightControl"
@@ -269,8 +264,16 @@ local function findNearestSpawn()
     return nearestSpawn
 end
 
--- Функции для управления полетом (Inf Jump стиль)
-local function startFlying(targetPosition)
+local function getCharacterSize(character)
+    -- Получаем размеры персонажа для точного позиционирования
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.HipHeight + 2 -- Добавляем небольшой запас
+    end
+    return 3 -- Стандартная высота по умолчанию
+end
+
+local function smoothFlyToTarget(targetPosition)
     local character = player.Character
     if not character or not character.PrimaryPart then return false end
     
@@ -281,103 +284,157 @@ local function startFlying(targetPosition)
     originalAnchoredState = character.PrimaryPart.Anchored
     
     humanoid.PlatformStand = true
-    isFlying = true
-    
-    -- Создаем BodyVelocity для управления полетом
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-    bodyVelocity.P = 1000
-    bodyVelocity.Parent = character.PrimaryPart
-    
-    statusLabel.Text = "Статус: Полет..."
+    isFloating = true
     
     local startPosition = character.PrimaryPart.Position
-    local direction = (targetPosition - startPosition).Unit
-    
-    -- Рассчитываем время полета на основе расстояния
-    local distance = (targetPosition - startPosition).Magnitude
-    local flightTime = distance / flySpeed
-    
     local startTime = tick()
+    local duration = 1.5
     
-    local flightConnection
-    flightConnection = RunService.Heartbeat:Connect(function()
-        if not character or not character.PrimaryPart or not isFlying then
-            if flightConnection then flightConnection:Disconnect() end
-            return
-        end
-        
+    statusLabel.Text = "Статус: Подъем..."
+    
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
         local elapsed = tick() - startTime
-        local progress = math.min(elapsed / flightTime, 1)
+        local alpha = math.min(elapsed / duration, 1)
+        local smoothAlpha = 1 - (1 - alpha) * (1 - alpha)
         
-        -- Вычисляем текущую позицию
-        local currentPosition = startPosition + (direction * flySpeed * elapsed)
+        -- Вычисляем расстояние до цели
+        local distanceToTarget = (targetPosition - character.PrimaryPart.Position).Magnitude
         
-        -- Устанавливаем скорость для движения к цели
-        bodyVelocity.Velocity = direction * flySpeed
-        
-        -- Если достигли цели или прошло достаточно времени
-        if progress >= 1 or (character.PrimaryPart.Position - targetPosition).Magnitude <= 3 then
-            flightConnection:Disconnect()
-            stopFlying()
-            landAtTarget(targetPosition)
-        end
-    end)
-    
-    table.insert(currentConnections, flightConnection)
-    return true
-end
-
-local function stopFlying()
-    isFlying = false
-    if bodyVelocity then
-        bodyVelocity:Destroy()
-        bodyVelocity = nil
-    end
-end
-
-local function landAtTarget(targetPosition)
-    local character = player.Character
-    if not character or not character.PrimaryPart then return false end
-    
-    statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
-    
-    -- Устанавливаем позицию точно на цели
-    character.PrimaryPart.CFrame = CFrame.new(targetPosition)
-    
-    -- Фиксируем персонажа
-    character.PrimaryPart.Anchored = true
-    character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-    character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-    
-    -- Создаем соединение для поддержания фиксации
-    floatConnection = RunService.Heartbeat:Connect(function()
-        if not character or not character.PrimaryPart or not isFloating then
-            if floatConnection then floatConnection:Disconnect() end
+        -- Если осталось менее 3 studs, останавливаемся и устанавливаем Anchored
+        if distanceToTarget <= 3 then
+            connection:Disconnect()
+            
+            -- ТОЧНОЕ ПОЗИЦИОНИРОВАНИЕ ПО Z
+            local currentPos = character.PrimaryPart.Position
+            local characterSize = getCharacterSize(character)
+            
+            -- Определяем направление движения по Z
+            local zDirection = targetPosition.Z > currentPos.Z and 1 or -1
+            
+            -- Вычисляем финальную позицию с учетом размера персонажа
+            local finalPosition = Vector3.new(
+                targetPosition.X,
+                targetPosition.Y + characterSize, -- Учитываем высоту персонажа
+                targetPosition.Z - (zDirection * characterSize * 0.5) -- Отступаем от объекта по Z
+            )
+            
+            -- Плавно перемещаем к финальной позиции
+            local finalStartTime = tick()
+            local finalDuration = 0.3
+            
+            local finalConnection
+            finalConnection = RunService.Heartbeat:Connect(function()
+                local finalElapsed = tick() - finalStartTime
+                local finalAlpha = math.min(finalElapsed / finalDuration, 1)
+                local finalSmoothAlpha = 1 - (1 - finalAlpha) * (1 - finalAlpha)
+                
+                local newPos = currentPos:Lerp(finalPosition, finalSmoothAlpha)
+                character.PrimaryPart.CFrame = CFrame.new(newPos)
+                
+                if finalAlpha >= 1 then
+                    finalConnection:Disconnect()
+                    statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
+                    
+                    if floatConnection then floatConnection:Disconnect() end
+                    
+                    -- Устанавливаем Anchored и останавливаем все движения
+                    character.PrimaryPart.Anchored = true
+                    character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                    character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+                    
+                    floatConnection = RunService.Heartbeat:Connect(function()
+                        if not character or not character.PrimaryPart or not isFloating then
+                            if floatConnection then floatConnection:Disconnect() end
+                            return
+                        end
+                        -- Поддерживаем Anchored состояние
+                        character.PrimaryPart.Anchored = true
+                        character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+                    end)
+                    
+                    table.insert(currentConnections, floatConnection)
+                end
+            end)
+            
+            table.insert(currentConnections, finalConnection)
             return
         end
-        character.PrimaryPart.Anchored = true
+        
+        -- Продолжаем движение к цели
+        local newPosition = startPosition:Lerp(targetPosition, smoothAlpha)
+        
         character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+        character.PrimaryPart.CFrame = CFrame.new(newPosition)
+        
+        if alpha >= 1 then
+            connection:Disconnect()
+            
+            -- ТОЧНОЕ ПОЗИЦИОНИРОВАНИЕ ПО Z (на случай если не сработала первая проверка)
+            local currentPos = character.PrimaryPart.Position
+            local characterSize = getCharacterSize(character)
+            
+            -- Определяем направление движения по Z
+            local zDirection = targetPosition.Z > currentPos.Z and 1 or -1
+            
+            -- Вычисляем финальную позицию с учетом размера персонажа
+            local finalPosition = Vector3.new(
+                targetPosition.X,
+                targetPosition.Y + characterSize, -- Учитываем высоту персонажа
+                targetPosition.Z - (zDirection * characterSize * 0.5) -- Отступаем от объекта по Z
+            )
+            
+            -- Плавно перемещаем к финальной позиции
+            local finalStartTime = tick()
+            local finalDuration = 0.3
+            
+            local finalConnection
+            finalConnection = RunService.Heartbeat:Connect(function()
+                local finalElapsed = tick() - finalStartTime
+                local finalAlpha = math.min(finalElapsed / finalDuration, 1)
+                local finalSmoothAlpha = 1 - (1 - finalAlpha) * (1 - finalAlpha)
+                
+                local newPos = currentPos:Lerp(finalPosition, finalSmoothAlpha)
+                character.PrimaryPart.CFrame = CFrame.new(newPos)
+                
+                if finalAlpha >= 1 then
+                    finalConnection:Disconnect()
+                    statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
+                    
+                    if floatConnection then floatConnection:Disconnect() end
+                    
+                    -- Устанавливаем Anchored и останавливаем все движения
+                    character.PrimaryPart.Anchored = true
+                    character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                    character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+                    
+                    floatConnection = RunService.Heartbeat:Connect(function()
+                        if not character or not character.PrimaryPart or not isFloating then
+                            if floatConnection then floatConnection:Disconnect() end
+                            return
+                        end
+                        -- Поддерживаем Anchored состояние
+                        character.PrimaryPart.Anchored = true
+                        character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+                        character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
+                    end)
+                    
+                    table.insert(currentConnections, floatConnection)
+                end
+            end)
+            
+            table.insert(currentConnections, finalConnection)
+        end
     end)
     
-    table.insert(currentConnections, floatConnection)
-    isFloating = true
+    table.insert(currentConnections, connection)
     return true
 end
 
 local function deactivateFlightMode()
     isFloating = false
-    isFlying = false
-    
-    -- Останавливаем полет
-    stopFlying()
-    
-    if floatConnection then 
-        floatConnection:Disconnect() 
-        floatConnection = nil
-    end
+    if floatConnection then floatConnection:Disconnect() end
     
     -- Восстанавливаем прозрачность и CanCollide для plot
     restorePlotTransparency()
@@ -424,7 +481,7 @@ local function activateFlightToSpawn()
     
     local nearestSpawn = findNearestSpawn()
     if nearestSpawn then
-        startFlying(nearestSpawn)
+        smoothFlyToTarget(nearestSpawn)
     else
         statusLabel.Text = "Статус: Spawn не найден"
         restorePlotTransparency() -- Восстанавливаем если Spawn не найден
