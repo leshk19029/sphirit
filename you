@@ -232,7 +232,7 @@ local function findNearestSpawn()
                         
                         local targetPosition = Vector3.new(
                             spawn.Position.X,
-                            spawn.Position.Y - 3,
+                            spawn.Position.Y - 2,
                             finalTargetZ
                         )
                         
@@ -245,7 +245,7 @@ local function findNearestSpawn()
                         -- Если не нашли подходящую пару, используем оригинальную Z спавна
                         local targetPosition = Vector3.new(
                             spawn.Position.X,
-                            spawn.Position.Y - 3,
+                            spawn.Position.Y - 2,
                             spawn.Position.Z
                         )
                         
