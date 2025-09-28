@@ -16,7 +16,6 @@ local scriptActive = true
 local flightEnabled = false
 local originalProperties = {}
 local originalAnchoredState = false
-local originalPlatformStand = false
 
 -- Создаем интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -258,88 +257,79 @@ local function smoothFlyToTarget(targetPosition)
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return false end
     
-    -- Сохраняем исходные состояния
+    -- Сохраняем исходное состояние Anchored
     originalAnchoredState = character.PrimaryPart.Anchored
-    originalPlatformStand = humanoid.PlatformStand
     
-    -- Включаем PlatformStand только когда начинаем полет
-    humanoid.PlatformStand = true
+    -- НЕ включаем PlatformStand - чтобы анимации работали
     isFloating = true
     
     local startPosition = character.PrimaryPart.Position
     local startTime = tick()
-    local duration = 1.5
+    local duration = 2.0 -- Увеличил время для более плавного полета
     
-    statusLabel.Text = "Статус: Подъем..."
+    statusLabel.Text = "Статус: Полёт..."
     
     local connection
     connection = RunService.Heartbeat:Connect(function()
+        if not character or not character.PrimaryPart or not isFloating then
+            connection:Disconnect()
+            return
+        end
+        
         local elapsed = tick() - startTime
         local alpha = math.min(elapsed / duration, 1)
-        local smoothAlpha = 1 - (1 - alpha) * (1 - alpha)
         
-        local distanceToTarget = (targetPosition - character.PrimaryPart.Position).Magnitude
+        -- Параболическая траектория (как при прыжке)
+        local parabolicAlpha = math.sin(alpha * math.pi)
         
-        -- Если достигли цели, устанавливаем Anchored и завершаем полет
-        if distanceToTarget <= 3 then
+        local currentPosition = character.PrimaryPart.Position
+        local distanceToTarget = (targetPosition - currentPosition).Magnitude
+        
+        -- Если достигли цели, устанавливаем Anchored
+        if distanceToTarget <= 5 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
-            
-            if floatConnection then floatConnection:Disconnect() end
             
             -- Устанавливаем Anchored только когда прилетели
             character.PrimaryPart.Anchored = true
             character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
             character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
             
-            floatConnection = RunService.Heartbeat:Connect(function()
-                if not character or not character.PrimaryPart or not isFloating then
-                    if floatConnection then floatConnection:Disconnect() end
-                    return
-                end
-                -- Поддерживаем Anchored состояние
-                character.PrimaryPart.Anchored = true
-                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-            end)
-            
-            table.insert(currentConnections, floatConnection)
             return
         end
         
-        -- Продолжаем движение к цели (Anchored = false во время полета)
-        character.PrimaryPart.Anchored = false
+        -- Вычисляем направление и расстояние
+        local direction = (targetPosition - currentPosition).Unit
+        local horizontalDistance = Vector3.new(targetPosition.X - currentPosition.X, 0, targetPosition.Z - currentPosition.Z).Magnitude
+        local verticalDistance = targetPosition.Y - currentPosition.Y
         
-        local newPosition = startPosition:Lerp(targetPosition, smoothAlpha)
+        -- Вычисляем скорость (горизонтальная и вертикальная отдельно)
+        local horizontalSpeed = math.min(horizontalDistance * 2, 80) -- Макс скорость 80
+        local verticalSpeed = math.min(math.abs(verticalDistance) * 3, 50) -- Макс вертикальная скорость 50
         
-        -- Используем Velocity для более плавного движения
-        local direction = (targetPosition - character.PrimaryPart.Position).Unit
-        local speed = math.min(distanceToTarget * 5, 50) -- Динамическая скорость
+        -- Создаем вектор скорости
+        local velocity = Vector3.new(
+            direction.X * horizontalSpeed,
+            direction.Y * verticalSpeed,
+            direction.Z * horizontalSpeed
+        )
         
-        character.PrimaryPart.Velocity = direction * speed
+        -- Применяем Velocity (как при прыжке)
+        character.PrimaryPart.Velocity = velocity
+        
+        -- Небольшая корректировка высоты для плавности
+        if alpha < 0.7 then
+            character.PrimaryPart.Velocity = character.PrimaryPart.Velocity + Vector3.new(0, 5, 0) -- Легкий подъем
+        end
         
         if alpha >= 1 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
-            if floatConnection then floatConnection:Disconnect() end
-            
             -- Устанавливаем Anchored только когда прилетели
             character.PrimaryPart.Anchored = true
             character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
             character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-            
-            floatConnection = RunService.Heartbeat:Connect(function()
-                if not character or not character.PrimaryPart or not isFloating then
-                    if floatConnection then floatConnection:Disconnect() end
-                    return
-                end
-                character.PrimaryPart.Anchored = true
-                character.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
-                character.PrimaryPart.RotVelocity = Vector3.new(0, 0, 0)
-            end)
-            
-            table.insert(currentConnections, floatConnection)
         end
     end)
     
@@ -349,7 +339,6 @@ end
 
 local function deactivateFlightMode()
     isFloating = false
-    if floatConnection then floatConnection:Disconnect() end
     
     -- Восстанавливаем прозрачность и CanCollide для plot
     restorePlotTransparency()
@@ -358,11 +347,6 @@ local function deactivateFlightMode()
     if character and character.PrimaryPart then
         -- Восстанавливаем исходное состояние Anchored
         character.PrimaryPart.Anchored = originalAnchoredState
-        
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then 
-            humanoid.PlatformStand = originalPlatformStand or false
-        end
         
         -- Сбрасываем Velocity для нормального падения
         if not character.PrimaryPart.Anchored then
