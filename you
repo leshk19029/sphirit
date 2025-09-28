@@ -17,6 +17,7 @@ local flightEnabled = false
 local originalProperties = {}
 local originalAnchoredState = false
 local targetZ = nil
+local isMovingToSmallerZ = false
 
 -- Создаем интерфейс
 local screenGui = Instance.new("ScreenGui")
@@ -242,6 +243,7 @@ local function findNearestSpawn()
                             shortestDistance = distance
                             nearestSpawn = targetPosition
                             targetZ = finalTargetZ
+                            isMovingToSmallerZ = (finalTargetZ == targetZ1 and targetZ1 < targetZ2) or (finalTargetZ == targetZ2 and targetZ2 < targetZ1)
                         end
                     else
                         -- Если не нашли подходящую пару, используем оригинальную Z спавна
@@ -256,6 +258,7 @@ local function findNearestSpawn()
                             shortestDistance = distance
                             nearestSpawn = targetPosition
                             targetZ = spawn.Position.Z
+                            isMovingToSmallerZ = false
                         end
                     end
                 end
@@ -314,8 +317,20 @@ local function smoothFlyToTarget(targetPosition)
         local currentPosition = character.PrimaryPart.Position
         local distanceToTarget = (targetPosition - currentPosition).Magnitude
         
-        -- Если достигли цели, устанавливаем Anchored
-        if distanceToTarget <= 1 then
+        -- Корректируем конечную позицию если летим к меньшей Z
+        local adjustedTargetPosition = targetPosition
+        if isMovingToSmallerZ then
+            adjustedTargetPosition = Vector3.new(
+                targetPosition.X,
+                targetPosition.Y,
+                targetPosition.Z + 0.5 -- Не долетаем на 0.5 studs
+            )
+        end
+        
+        local adjustedDistanceToTarget = (adjustedTargetPosition - currentPosition).Magnitude
+        
+        -- Если достигли скорректированной цели, устанавливаем Anchored
+        if adjustedDistanceToTarget <= 0.1 then
             connection:Disconnect()
             statusLabel.Text = "Статус: Зафиксирован (Down - отмена)"
             
@@ -328,7 +343,7 @@ local function smoothFlyToTarget(targetPosition)
         end
         
         -- Постоянная скорость 20
-        local direction = (targetPosition - currentPosition).Unit
+        local direction = (adjustedTargetPosition - currentPosition).Unit
         local speed = 20
         
         -- Применяем скорость
@@ -345,7 +360,7 @@ local function smoothFlyToTarget(targetPosition)
         end
         
         -- Точная корректировка высоты для точного приземления
-        local heightDiff = targetPosition.Y - currentPosition.Y
+        local heightDiff = adjustedTargetPosition.Y - currentPosition.Y
         if math.abs(heightDiff) > 0.5 then
             character.PrimaryPart.Velocity = Vector3.new(
                 character.PrimaryPart.Velocity.X,
@@ -354,7 +369,7 @@ local function smoothFlyToTarget(targetPosition)
             )
         end
         
-        statusLabel.Text = string.format("Статус: Полёт... (%.1m)", distanceToTarget)
+        statusLabel.Text = string.format("Статус: Полёт... (%.1m)", adjustedDistanceToTarget)
     end)
     
     table.insert(currentConnections, connection)
@@ -364,6 +379,7 @@ end
 local function deactivateFlightMode()
     isFloating = false
     targetZ = nil
+    isMovingToSmallerZ = false
     
     -- Восстанавливаем прозрачность и CanCollide для plot
     restorePlotTransparency()
