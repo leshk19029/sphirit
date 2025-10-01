@@ -1,398 +1,635 @@
--- Job ID Menu by Bind - Roblox
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local SimpleUI = {}
+
+-- Основные сервисы
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
 
--- Настройки
-local OPEN_BIND = Enum.KeyCode.F2 -- Клавиша для открытия меню (можно поменять)
-local DEBUG_MODE = true -- Режим отладки
+-- Кэш для объектов
+SimpleUI.cache = {}
 
--- Создание GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "JobIDMenuByBind"
-ScreenGui.Parent = PlayerGui
-ScreenGui.ResetOnSpawn = false
-
--- Основной фрейм меню (изначально скрыт)
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 400, 0, 250)
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
-MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-MainFrame.Visible = false
-MainFrame.Parent = ScreenGui
-
--- Скругление углов
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = MainFrame
-
--- Тень/обводка
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(80, 80, 90)
-UIStroke.Thickness = 2
-UIStroke.Parent = MainFrame
-
--- Заголовок
-local TitleFrame = Instance.new("Frame")
-TitleFrame.Name = "TitleFrame"
-TitleFrame.Size = UDim2.new(1, 0, 0, 50)
-TitleFrame.Position = UDim2.new(0, 0, 0, 0)
-TitleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-TitleFrame.BorderSizePixel = 0
-TitleFrame.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleFrame
-
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(1, -50, 1, 0)
-TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "🎯 ВВЕДИТЕ JOB ID"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 20
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.Parent = TitleFrame
-
--- Кнопка закрытия
-local CloseButton = Instance.new("TextButton")
-CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -40, 0, 10)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-CloseButton.Text = "✕"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 16
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = TitleFrame
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 15)
-CloseCorner.Parent = CloseButton
-
--- Поле ввода
-local InputContainer = Instance.new("Frame")
-InputContainer.Name = "InputContainer"
-InputContainer.Size = UDim2.new(0, 360, 0, 50)
-InputContainer.Position = UDim2.new(0.5, -180, 0.3, -25)
-InputContainer.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-InputContainer.BorderSizePixel = 0
-InputContainer.Parent = MainFrame
-
-local InputCorner = Instance.new("UICorner")
-InputCorner.CornerRadius = UDim.new(0, 8)
-InputCorner.Parent = InputContainer
-
-local TextBox = Instance.new("TextBox")
-TextBox.Name = "JobIdTextBox"
-TextBox.Size = UDim2.new(1, -20, 1, -10)
-TextBox.Position = UDim2.new(0, 10, 0, 5)
-TextBox.BackgroundTransparency = 1
-TextBox.Text = ""
-TextBox.PlaceholderText = "Введите цифровой Job ID..."
-TextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-TextBox.TextSize = 16
-TextBox.Font = Enum.Font.Gotham
-TextBox.TextXAlignment = Enum.TextXAlignment.Left
-TextBox.ClearTextOnFocus = false
-TextBox.Parent = InputContainer
-
--- Кнопка отправки
-local SubmitButton = Instance.new("TextButton")
-SubmitButton.Name = "SubmitButton"
-SubmitButton.Size = UDim2.new(0, 140, 0, 40)
-SubmitButton.Position = UDim2.new(0.5, -70, 0.7, -20)
-SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-SubmitButton.Text = "🚀 ОТПРАВИТЬ"
-SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-SubmitButton.TextSize = 14
-SubmitButton.Font = Enum.Font.GothamBold
-SubmitButton.Parent = MainFrame
-
-local SubmitCorner = Instance.new("UICorner")
-SubmitCorner.CornerRadius = UDim.new(0, 8)
-SubmitCorner.Parent = SubmitButton
-
--- Индикатор загрузки
-local LoadingFrame = Instance.new("Frame")
-LoadingFrame.Name = "LoadingFrame"
-LoadingFrame.Size = UDim2.new(1, -40, 0, 3)
-LoadingFrame.Position = UDim2.new(0, 20, 1, -5)
-LoadingFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-LoadingFrame.BorderSizePixel = 0
-LoadingFrame.Visible = false
-LoadingFrame.Parent = MainFrame
-
-local LoadingBar = Instance.new("Frame")
-LoadingBar.Name = "LoadingBar"
-LoadingBar.Size = UDim2.new(0, 0, 1, 0)
-LoadingBar.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-LoadingBar.BorderSizePixel = 0
-LoadingBar.Parent = LoadingFrame
-
--- Фрейм для уведомлений
-local NotificationFrame = Instance.new("Frame")
-NotificationFrame.Name = "NotificationFrame"
-NotificationFrame.Size = UDim2.new(1, -40, 0, 40)
-NotificationFrame.Position = UDim2.new(0, 20, 0, 160)
-NotificationFrame.BackgroundTransparency = 1
-NotificationFrame.Visible = false
-NotificationFrame.Parent = MainFrame
-
-local NotificationLabel = Instance.new("TextLabel")
-NotificationLabel.Name = "NotificationLabel"
-NotificationLabel.Size = UDim2.new(1, 0, 1, 0)
-NotificationLabel.BackgroundTransparency = 1
-NotificationLabel.Text = ""
-NotificationLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-NotificationLabel.TextSize = 14
-NotificationLabel.Font = Enum.Font.Gotham
-NotificationLabel.TextWrapped = true
-NotificationLabel.Parent = NotificationFrame
-
--- Индикатор бинда в углу экрана
-local BindIndicator = Instance.new("TextLabel")
-BindIndicator.Name = "BindIndicator"
-BindIndicator.Size = UDim2.new(0, 200, 0, 30)
-BindIndicator.Position = UDim2.new(1, -210, 1, -40)
-BindIndicator.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-BindIndicator.BackgroundTransparency = 0.8
-BindIndicator.Text = "Job Menu: " .. OPEN_BIND.Name
-BindIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-BindIndicator.TextSize = 12
-BindIndicator.Font = Enum.Font.Gotham
-BindIndicator.TextXAlignment = Enum.TextXAlignment.Left
-BindIndicator.Parent = ScreenGui
-
-local BindIndicatorCorner = Instance.new("UICorner")
-BindIndicatorCorner.CornerRadius = UDim.new(0, 6)
-BindIndicatorCorner.Parent = BindIndicator
-
-local BindIndicatorPadding = Instance.new("UIPadding")
-BindIndicatorPadding.PaddingLeft = UDim.new(0, 10)
-BindIndicatorPadding.Parent = BindIndicator
-
--- Переменные состояния
-local isMenuOpen = false
-local isProcessing = false
-
--- Анимации
-local function TweenObject(object, properties, duration)
-    local tweenInfo = TweenInfo.new(
-        duration or 0.3,
-        Enum.EasingStyle.Quad,
-        Enum.EasingDirection.Out
-    )
-    local tween = TweenService:Create(object, tweenInfo, properties)
-    tween:Play()
-    return tween
+-- Функция для загрузки модулей
+function SimpleUI.load(module)
+    if not SimpleUI.cache[module] then
+        SimpleUI.cache[module] = {content = SimpleUI[module]()}
+    end
+    return SimpleUI.cache[module].content
 end
 
--- Показать уведомление
-local function ShowNotification(message, isSuccess)
-    NotificationLabel.Text = message
-    
-    if isSuccess then
-        NotificationLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    else
-        NotificationLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-    end
-    
-    NotificationFrame.Visible = true
-    
-    -- Автоскрытие через 3 секунды
-    delay(3, function()
-        if NotificationFrame then
-            NotificationFrame.Visible = false
-        end
-    end)
-end
+-- Основной модуль
+function SimpleUI.core()
+    local core = {
+        Colors = {
+            Red = "#e53935",
+            Orange = "#f57c00", 
+            Green = "#43a047",
+            Blue = "#039be5",
+            White = "#ffffff",
+            Grey = "#484848",
+        },
+        Signals = {},
+        Objects = {}
+    }
 
--- Анимация загрузки
-local function ShowLoading(duration)
-    LoadingFrame.Visible = true
-    LoadingBar.Size = UDim2.new(0, 0, 1, 0)
-    
-    TweenObject(LoadingBar, {Size = UDim2.new(1, 0, 1, 0)}, duration or 2)
-end
-
-local function HideLoading()
-    LoadingFrame.Visible = false
-end
-
--- Открыть меню
-local function OpenMenu()
-    if isProcessing then return end
-    
-    isMenuOpen = true
-    MainFrame.Visible = true
-    MainFrame.BackgroundTransparency = 1
-    
-    -- Анимация появления
-    TweenObject(MainFrame, {BackgroundTransparency = 0}, 0.2)
-    
-    -- Фокус на поле ввода
-    wait(0.1)
-    if TextBox then
-        TextBox:CaptureFocus()
-    end
-    
-    if DEBUG_MODE then
-        print("📱 Меню открыто по бинду " .. OPEN_BIND.Name)
-    end
-end
-
--- Закрыть меню
-local function CloseMenu()
-    isMenuOpen = false
-    
-    -- Анимация исчезновения
-    TweenObject(MainFrame, {BackgroundTransparency = 1}, 0.2)
-    
-    wait(0.2)
-    if MainFrame then
-        MainFrame.Visible = false
-        TextBox.Text = ""
-        NotificationFrame.Visible = false
-        LoadingFrame.Visible = false
-    end
-    
-    if DEBUG_MODE then
-        print("📱 Меню закрыто")
-    end
-end
-
--- Обработка Job ID
-local function ProcessJobID(jobId)
-    if isProcessing then return end
-    
-    isProcessing = true
-    ShowLoading(1.5)
-    
-    -- Валидация
-    jobId = tostring(jobId):gsub("%s+", "")
-    
-    if jobId == "" then
-        ShowNotification("❌ Ошибка: Введите Job ID!", false)
-        HideLoading()
-        isProcessing = false
-        return
-    end
-    
-    -- Проверка на цифры
-    if not jobId:match("^%d+$") then
-        ShowNotification("❌ Ошибка: Job ID должен содержать только цифры!", false)
-        HideLoading()
-        isProcessing = false
-        return
-    end
-    
-    -- Имитация обработки
-    if DEBUG_MODE then
-        print("🔄 Обработка Job ID:", jobId)
-    end
-    
-    -- Задержка для имитации обработки
-    delay(1.5, function()
-        ShowNotification("✅ Успех! Job ID принят: " .. jobId, true)
+    -- Создание нового объекта с настройками по умолчанию
+    function core.New(className, properties, children)
+        local obj = Instance.new(className)
         
-        -- Здесь ваша логика обработки Job ID
-        -- Например: телепортация, сохранение, отправка на сервер и т.д.
+        -- Установка свойств по умолчанию
+        local defaultProps = {
+            ScreenGui = {
+                ResetOnSpawn = false,
+                ZIndexBehavior = "Sibling",
+            },
+            Frame = {
+                BorderSizePixel = 0,
+                BackgroundColor3 = Color3.new(1, 1, 1),
+            },
+            TextLabel = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderSizePixel = 0,
+                Text = "",
+                TextColor3 = Color3.new(1, 1, 1),
+                TextSize = 14,
+            },
+            TextButton = {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                TextColor3 = Color3.new(1, 1, 1),
+                TextSize = 14,
+            },
+            ScrollingFrame = {
+                ScrollBarImageTransparency = 1,
+                BorderSizePixel = 0,
+            }
+        }
         
-        if DEBUG_MODE then
-            print("🎯 Job ID обработан:", jobId)
+        -- Применение свойств по умолчанию
+        for prop, value in pairs(defaultProps[className] or {}) do
+            obj[prop] = value
         end
         
-        -- Пример использования:
-        -- game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, jobId, Player)
+        -- Применение пользовательских свойств
+        for prop, value in pairs(properties or {}) do
+            obj[prop] = value
+        end
         
-        HideLoading()
-        isProcessing = false
+        -- Добавление детей
+        for _, child in pairs(children or {}) do
+            child.Parent = obj
+        end
         
-        -- Автозакрытие меню через 2 секунды после успеха
-        delay(2, function()
-            if isMenuOpen then
-                CloseMenu()
+        return obj
+    end
+
+    -- Создание скругленного фрейма
+    function core.NewRoundFrame(radius, frameType, properties, children)
+        local imageMap = {
+            Squircle = "rbxassetid://80999662900595",
+            SquircleOutline = "rbxassetid://117788349049947",
+            Shadow = "rbxassetid://84825982946844"
+        }
+        
+        local obj = core.New("ImageLabel", {
+            Image = imageMap[frameType] or imageMap.Squircle,
+            ScaleType = "Slice",
+            SliceCenter = Rect.new(256, 256, 256, 256),
+            SliceScale = 1,
+            BackgroundTransparency = 1,
+        }, children)
+        
+        -- Применение пользовательских свойств
+        for prop, value in pairs(properties or {}) do
+            obj[prop] = value
+        end
+        
+        -- Функция для обновления скругления
+        local function updateSliceScale()
+            local scale = radius / 256
+            obj.SliceScale = math.max(scale, 0.0001)
+        end
+        
+        updateSliceScale()
+        
+        return obj
+    end
+
+    -- Анимации
+    function core.Tween(object, duration, properties, easingStyle, easingDirection)
+        easingStyle = easingStyle or Enum.EasingStyle.Quad
+        easingDirection = easingDirection or Enum.EasingDirection.Out
+        
+        local tweenInfo = TweenInfo.new(duration, easingStyle, easingDirection)
+        return TweenService:Create(object, tweenInfo, properties)
+    end
+
+    -- Плавное появление
+    function core.FadeIn(object, duration)
+        object.Visible = true
+        return core.Tween(object, duration, {BackgroundTransparency = 0})
+    end
+
+    -- Плавное исчезновение  
+    function core.FadeOut(object, duration)
+        local tween = core.Tween(object, duration, {BackgroundTransparency = 1})
+        tween.Completed:Connect(function()
+            object.Visible = false
+        end)
+        return tween
+    end
+
+    -- Анимация скейла
+    function core.Scale(object, duration, targetScale)
+        return core.Tween(object, duration, {Size = targetScale})
+    end
+
+    -- Анимация позиции
+    function core.Move(object, duration, targetPosition)
+        return core.Tween(object, duration, {Position = targetPosition})
+    end
+
+    -- Добавление сигнала
+    function core.AddSignal(signal, callback)
+        local connection = signal:Connect(callback)
+        table.insert(core.Signals, connection)
+        return connection
+    end
+
+    -- Безопасный вызов колбэка
+    function core.SafeCallback(callback, ...)
+        if callback then
+            local success, result = pcall(callback, ...)
+            if not success then
+                warn("[SimpleUI] Callback error:", result)
+            end
+        end
+    end
+
+    -- Создание окна
+    function core.CreateWindow(title, size, position)
+        local screenGui = core.New("ScreenGui", {
+            Name = "SimpleUI",
+            ResetOnSpawn = false,
+            ZIndexBehavior = "Sibling"
+        })
+        
+        local mainFrame = core.NewRoundFrame(15, "Squircle", {
+            Name = "MainWindow",
+            Size = size or UDim2.new(0, 400, 0, 300),
+            Position = position or UDim2.new(0.5, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = Color3.fromHex("#1a1a1a"),
+            Parent = screenGui
+        })
+        
+        -- Заголовок окна
+        local titleBar = core.New("Frame", {
+            Name = "TitleBar",
+            Size = UDim2.new(1, 0, 0, 30),
+            BackgroundTransparency = 1,
+            Parent = mainFrame
+        }, {
+            core.New("TextLabel", {
+                Name = "Title",
+                Size = UDim2.new(1, -60, 1, 0),
+                Position = UDim2.new(0, 10, 0, 0),
+                Text = title or "SimpleUI Window",
+                TextColor3 = Color3.fromHex("#ffffff"),
+                TextSize = 16,
+                TextXAlignment = "Left",
+                BackgroundTransparency = 1
+            }),
+            core.New("TextButton", {
+                Name = "CloseButton",
+                Size = UDim2.new(0, 20, 0, 20),
+                Position = UDim2.new(1, -25, 0, 5),
+                Text = "X",
+                TextColor3 = Color3.fromHex("#ffffff"),
+                BackgroundColor3 = Color3.fromHex("#e53935"),
+                Parent = mainFrame
+            })
+        })
+        
+        -- Контентная область
+        local contentFrame = core.New("ScrollingFrame", {
+            Name = "Content",
+            Size = UDim2.new(1, -20, 1, -50),
+            Position = UDim2.new(0, 10, 0, 40),
+            BackgroundTransparency = 1,
+            Parent = mainFrame
+        }, {
+            core.New("UIListLayout", {
+                SortOrder = "LayoutOrder",
+                Padding = UDim.new(0, 5)
+            })
+        })
+        
+        local window = {
+            ScreenGui = screenGui,
+            MainFrame = mainFrame,
+            ContentFrame = contentFrame,
+            TitleBar = titleBar
+        }
+        
+        -- Анимация открытия
+        function window:Open()
+            screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+            mainFrame.Visible = true
+            mainFrame.BackgroundTransparency = 1
+            mainFrame.Size = UDim2.new(0, 10, 0, 10)
+            
+            local tween1 = core.Tween(mainFrame, 0.3, {
+                BackgroundTransparency = 0,
+                Size = size or UDim2.new(0, 400, 0, 300)
+            }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            
+            tween1:Play()
+        end
+        
+        -- Анимация закрытия
+        function window:Close()
+            local tween = core.Tween(mainFrame, 0.2, {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 10, 0, 10)
+            }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+            
+            tween:Play()
+            tween.Completed:Connect(function()
+                screenGui:Destroy()
+            end)
+        end
+        
+        -- Обработчик закрытия
+        core.AddSignal(titleBar.CloseButton.MouseButton1Click, function()
+            window:Close()
+        end)
+        
+        return window
+    end
+
+    -- Создание кнопки
+    function core.CreateButton(text, size, parent, callback)
+        local button = core.New("TextButton", {
+            Size = size or UDim2.new(1, -20, 0, 40),
+            BackgroundColor3 = Color3.fromHex("#315dff"),
+            TextColor3 = Color3.fromHex("#ffffff"),
+            Text = text or "Button",
+            TextSize = 14,
+            Parent = parent
+        })
+        
+        core.NewRoundFrame(8, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = button
+        })
+        
+        -- Анимации наведения
+        core.AddSignal(button.MouseEnter, function()
+            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#1e40ff")}):Play()
+        end)
+        
+        core.AddSignal(button.MouseLeave, function()
+            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
+        end)
+        
+        core.AddSignal(button.MouseButton1Click, function()
+            -- Анимация нажатия
+            core.Tween(button, 0.05, {BackgroundColor3 = Color3.fromHex("#1e3a8a")}):Play()
+            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
+            
+            core.SafeCallback(callback)
+        end)
+        
+        return button
+    end
+
+    -- Создание переключателя
+    function core.CreateToggle(text, parent, callback)
+        local toggleFrame = core.New("Frame", {
+            Size = UDim2.new(1, -20, 0, 30),
+            BackgroundTransparency = 1,
+            Parent = parent
+        }, {
+            core.New("TextLabel", {
+                Size = UDim2.new(1, -50, 1, 0),
+                Text = text or "Toggle",
+                TextColor3 = Color3.fromHex("#ffffff"),
+                TextSize = 14,
+                TextXAlignment = "Left",
+                BackgroundTransparency = 1
+            })
+        })
+        
+        local toggleButton = core.New("TextButton", {
+            Size = UDim2.new(0, 40, 0, 20),
+            Position = UDim2.new(1, -45, 0, 5),
+            BackgroundColor3 = Color3.fromHex("#666666"),
+            Text = "",
+            Parent = toggleFrame
+        })
+        
+        core.NewRoundFrame(10, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = toggleButton
+        })
+        
+        local toggleDot = core.New("Frame", {
+            Size = UDim2.new(0, 12, 0, 12),
+            Position = UDim2.new(0, 4, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = Color3.fromHex("#ffffff"),
+            Parent = toggleButton
+        })
+        
+        core.NewRoundFrame(6, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = toggleDot
+        })
+        
+        local isToggled = false
+        
+        local function updateToggle()
+            if isToggled then
+                core.Tween(toggleButton, 0.2, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
+                core.Tween(toggleDot, 0.2, {Position = UDim2.new(1, -16, 0.5, 0)}):Play()
+            else
+                core.Tween(toggleButton, 0.2, {BackgroundColor3 = Color3.fromHex("#666666")}):Play()
+                core.Tween(toggleDot, 0.2, {Position = UDim2.new(0, 4, 0.5, 0)}):Play()
+            end
+        end
+        
+        core.AddSignal(toggleButton.MouseButton1Click, function()
+            isToggled = not isToggled
+            updateToggle()
+            core.SafeCallback(callback, isToggled)
+        end)
+        
+        function toggleFrame:Set(value)
+            isToggled = value
+            updateToggle()
+        end
+        
+        function toggleFrame:Get()
+            return isToggled
+        end
+        
+        return toggleFrame
+    end
+
+    -- Создание слайдера
+    function core.CreateSlider(text, min, max, parent, callback)
+        local sliderFrame = core.New("Frame", {
+            Size = UDim2.new(1, -20, 0, 50),
+            BackgroundTransparency = 1,
+            Parent = parent
+        }, {
+            core.New("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 20),
+                Text = text or "Slider",
+                TextColor3 = Color3.fromHex("#ffffff"),
+                TextSize = 14,
+                TextXAlignment = "Left",
+                BackgroundTransparency = 1
+            })
+        })
+        
+        local sliderTrack = core.New("Frame", {
+            Size = UDim2.new(1, 0, 0, 6),
+            Position = UDim2.new(0, 0, 1, -15),
+            BackgroundColor3 = Color3.fromHex("#444444"),
+            Parent = sliderFrame
+        })
+        
+        core.NewRoundFrame(3, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = sliderTrack
+        })
+        
+        local sliderFill = core.New("Frame", {
+            Size = UDim2.new(0.5, 0, 1, 0),
+            BackgroundColor3 = Color3.fromHex("#315dff"),
+            Parent = sliderTrack
+        })
+        
+        core.NewRoundFrame(3, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = sliderFill
+        })
+        
+        local sliderThumb = core.New("TextButton", {
+            Size = UDim2.new(0, 16, 0, 16),
+            Position = UDim2.new(0.5, -8, 0.5, -8),
+            BackgroundColor3 = Color3.fromHex("#ffffff"),
+            Text = "",
+            Parent = sliderTrack
+        })
+        
+        core.NewRoundFrame(8, "Squircle", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Parent = sliderThumb
+        })
+        
+        local valueLabel = core.New("TextLabel", {
+            Size = UDim2.new(0, 60, 0, 20),
+            Position = UDim2.new(1, -65, 0, 0),
+            Text = "50",
+            TextColor3 = Color3.fromHex("#ffffff"),
+            TextSize = 14,
+            BackgroundTransparency = 1,
+            Parent = sliderFrame
+        })
+        
+        local currentValue = 50
+        local isDragging = false
+        
+        local function updateSlider(value)
+            currentValue = math.clamp(value, min or 0, max or 100)
+            local percentage = (currentValue - (min or 0)) / ((max or 100) - (min or 0))
+            
+            core.Tween(sliderFill, 0.1, {Size = UDim2.new(percentage, 0, 1, 0)}):Play()
+            core.Tween(sliderThumb, 0.1, {Position = UDim2.new(percentage, -8, 0.5, -8)}):Play()
+            
+            valueLabel.Text = tostring(math.floor(currentValue))
+            core.SafeCallback(callback, currentValue)
+        end
+        
+        core.AddSignal(sliderThumb.MouseButton1Down, function()
+            isDragging = true
+        end)
+        
+        core.AddSignal(UserInputService.InputEnded, function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDragging = false
             end
         end)
-    end)
+        
+        core.AddSignal(UserInputService.InputChanged, function(input)
+            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local mousePos = UserInputService:GetMouseLocation()
+                local trackPos = sliderTrack.AbsolutePosition
+                local trackSize = sliderTrack.AbsoluteSize
+                
+                local relativeX = (mousePos.X - trackPos.X) / trackSize.X
+                relativeX = math.clamp(relativeX, 0, 1)
+                
+                local newValue = (min or 0) + relativeX * ((max or 100) - (min or 0))
+                updateSlider(newValue)
+            end
+        end)
+        
+        function sliderFrame:Set(value)
+            updateSlider(value)
+        end
+        
+        function sliderFrame:Get()
+            return currentValue
+        end
+        
+        updateSlider(currentValue)
+        
+        return sliderFrame
+    end
+
+    return core
 end
 
--- Обработчики событий
-CloseButton.MouseButton1Click:Connect(CloseMenu)
-
-SubmitButton.MouseButton1Click:Connect(function()
-    ProcessJobID(TextBox.Text)
-end)
-
--- Отправка по Enter
-TextBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        ProcessJobID(TextBox.Text)
-    end
-end)
-
--- Обработка бинда
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+-- Модуль уведомлений
+function SimpleUI.notifications()
+    local notifications = {
+        Notifications = {},
+        NotificationIndex = 0
+    }
     
-    if input.KeyCode == OPEN_BIND then
-        if isMenuOpen then
-            CloseMenu()
-        else
-            OpenMenu()
-        end
-    end
-    
-    -- Закрытие по ESC
-    if input.KeyCode == Enum.KeyCode.Escape and isMenuOpen then
-        CloseMenu()
-    end
-end)
-
--- Закрытие при клике вне меню
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and isMenuOpen then
-        local mousePos = UserInputService:GetMouseLocation()
-        local absPos = MainFrame.AbsolutePosition
-        local absSize = MainFrame.AbsoluteSize
+    function notifications.Init(parent)
+        local holder = SimpleUI.load("core").New("Frame", {
+            Position = UDim2.new(1, -20, 0, 20),
+            AnchorPoint = Vector2.new(1, 0),
+            Size = UDim2.new(0, 300, 1, -100),
+            BackgroundTransparency = 1,
+            Parent = parent
+        }, {
+            SimpleUI.load("core").New("UIListLayout", {
+                HorizontalAlignment = "Center",
+                SortOrder = "LayoutOrder",
+                VerticalAlignment = "Bottom",
+                Padding = UDim.new(0, 8)
+            })
+        })
         
-        -- Проверка клика вне меню
-        if mousePos.X < absPos.X or mousePos.X > absPos.X + absSize.X or
-           mousePos.Y < absPos.Y or mousePos.Y > absPos.Y + absSize.Y then
-            CloseMenu()
-        end
+        notifications.Holder = holder
+        return holder
     end
-end)
-
--- Глобальные функции для вызова из других скриптов
-_G.OpenJobIDMenu = OpenMenu
-_G.CloseJobIDMenu = CloseMenu
-_G.SubmitJobID = ProcessJobID
-
--- Информация в консоль
-print("🎯 Job ID Menu by Bind загружен!")
-print("📋 Бинд: " .. OPEN_BIND.Name)
-print("🔧 Режим отладки: " .. tostring(DEBUG_MODE))
-print("💡 Используйте: _G.OpenJobIDMenu() для открытия меню")
-
--- Автоочистка при выходе
-Player.AncestryChanged:Connect(function()
-    if not Player.Parent then
-        if ScreenGui then
-            ScreenGui:Destroy()
+    
+    function notifications.New(params)
+        local core = SimpleUI.load("core")
+        local notification = {
+            Title = params.Title or "Notification",
+            Content = params.Content,
+            Duration = params.Duration or 5,
+            Icon = params.Icon
+        }
+        
+        notifications.NotificationIndex = notifications.NotificationIndex + 1
+        notifications.Notifications[notifications.NotificationIndex] = notification
+        
+        local notificationFrame = core.NewRoundFrame(10, "Squircle", {
+            Size = UDim2.new(1, 0, 0, 0),
+            Position = UDim2.new(0, 0, 1, 0),
+            AnchorPoint = Vector2.new(0, 1),
+            AutomaticSize = "Y",
+            BackgroundColor3 = Color3.fromHex("#1a1a1a"),
+            Parent = notifications.Holder
+        }, {
+            core.New("UIPadding", {
+                PaddingTop = UDim.new(0, 10),
+                PaddingLeft = UDim.new(0, 10),
+                PaddingRight = UDim.new(0, 10),
+                PaddingBottom = UDim.new(0, 10)
+            }),
+            core.New("UIListLayout", {
+                Padding = UDim.new(0, 5),
+                FillDirection = "Vertical"
+            }),
+            core.New("TextLabel", {
+                Text = notification.Title,
+                TextColor3 = Color3.fromHex("#ffffff"),
+                TextSize = 16,
+                TextXAlignment = "Left",
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 20)
+            })
+        })
+        
+        if notification.Content then
+            core.New("TextLabel", {
+                Text = notification.Content,
+                TextColor3 = Color3.fromHex("#cccccc"),
+                TextSize = 14,
+                TextXAlignment = "Left",
+                TextWrapped = true,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = "Y",
+                Parent = notificationFrame
+            })
         end
+        
+        -- Анимация появления
+        notificationFrame.Size = UDim2.new(1, 0, 0, 0)
+        core.Tween(notificationFrame, 0.3, {
+            Size = UDim2.new(1, 0, 0, notificationFrame.AbsoluteContentSize.Y)
+        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+        
+        -- Анимация исчезновения
+        if notification.Duration then
+            task.spawn(function()
+                task.wait(notification.Duration)
+                core.Tween(notificationFrame, 0.3, {
+                    Size = UDim2.new(1, 0, 0, 0),
+                    BackgroundTransparency = 1
+                }, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+                
+                task.wait(0.3)
+                notificationFrame:Destroy()
+            end)
+        end
+        
+        function notification:Close()
+            core.Tween(notificationFrame, 0.3, {
+                Size = UDim2.new(1, 0, 0, 0),
+                BackgroundTransparency = 1
+            }, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+            
+            task.wait(0.3)
+            notificationFrame:Destroy()
+        end
+        
+        return notification
     end
-end)
+    
+    return notifications
+end
+
+-- Основная функция для использования библиотеки
+function SimpleUI:CreateWindow(title, size, position)
+    local core = SimpleUI.load("core")
+    return core.CreateWindow(title, size, position)
+end
+
+function SimpleUI:Notify(params)
+    local notifications = SimpleUI.load("notifications")
+    return notifications.New(params)
+end
+
+-- Инициализация библиотеки
+function SimpleUI:Init()
+    -- Загружаем основные модули
+    SimpleUI.load("core")
+    SimpleUI.load("notifications")
+    
+    return SimpleUI
+end
+
+return SimpleUI:Init()
