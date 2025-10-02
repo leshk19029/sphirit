@@ -1,635 +1,146 @@
-local SimpleUI = {}
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+-- Load UI Library
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/x2zu/OPEN-SOURCE-UI-ROBLOX/refs/heads/main/X2ZU%20UI%20ROBLOX%20OPEN%20SOURCE/DummyUi-leak-by-x2zu/fetching-main/Tools/Framework.luau"))()
 
--- Основные сервисы
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-
--- Кэш для объектов
-SimpleUI.cache = {}
-
--- Функция для загрузки модулей
-function SimpleUI.load(module)
-    if not SimpleUI.cache[module] then
-        SimpleUI.cache[module] = {content = SimpleUI[module]()}
-    end
-    return SimpleUI.cache[module].content
-end
-
--- Основной модуль
-function SimpleUI.core()
-    local core = {
-        Colors = {
-            Red = "#e53935",
-            Orange = "#f57c00", 
-            Green = "#43a047",
-            Blue = "#039be5",
-            White = "#ffffff",
-            Grey = "#484848",
-        },
-        Signals = {},
-        Objects = {}
+-- Create Main Window
+local Window = Library:Window({
+    Title = "x2zu [ Stellar ]",
+    Desc = "x2zu on top",
+    Icon = 105059922903197,
+    Theme = "Dark",
+    Config = {
+        Keybind = Enum.KeyCode.LeftControl,
+        Size = UDim2.new(0, 500, 0, 400)
+    },
+    CloseUIButton = {
+        Enabled = true,
+        Text = "x2zu"
     }
+})
 
-    -- Создание нового объекта с настройками по умолчанию
-    function core.New(className, properties, children)
-        local obj = Instance.new(className)
-        
-        -- Установка свойств по умолчанию
-        local defaultProps = {
-            ScreenGui = {
-                ResetOnSpawn = false,
-                ZIndexBehavior = "Sibling",
-            },
-            Frame = {
-                BorderSizePixel = 0,
-                BackgroundColor3 = Color3.new(1, 1, 1),
-            },
-            TextLabel = {
-                BackgroundColor3 = Color3.new(1, 1, 1),
-                BorderSizePixel = 0,
-                Text = "",
-                TextColor3 = Color3.new(1, 1, 1),
-                TextSize = 14,
-            },
-            TextButton = {
-                BackgroundColor3 = Color3.new(1, 1, 1),
-                BorderSizePixel = 0,
-                Text = "",
-                AutoButtonColor = false,
-                TextColor3 = Color3.new(1, 1, 1),
-                TextSize = 14,
-            },
-            ScrollingFrame = {
-                ScrollBarImageTransparency = 1,
-                BorderSizePixel = 0,
-            }
-        }
-        
-        -- Применение свойств по умолчанию
-        for prop, value in pairs(defaultProps[className] or {}) do
-            obj[prop] = value
+-- Sidebar Vertical Separator
+local SidebarLine = Instance.new("Frame")
+SidebarLine.Size = UDim2.new(0, 1, 1, 0)
+SidebarLine.Position = UDim2.new(0, 140, 0, 0) -- adjust if needed
+SidebarLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SidebarLine.BorderSizePixel = 0
+SidebarLine.ZIndex = 5
+SidebarLine.Name = "SidebarLine"
+SidebarLine.Parent = game:GetService("CoreGui") -- Or Window.Gui if accessible
+
+-- Tab
+local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
+    -- Section
+    Tab:Section({Title = "All UI Components"})
+
+    -- Toggle
+    Tab:Toggle({
+        Title = "Enable Feature",
+        Desc = "Toggle to enable or disable the feature",
+        Value = false,
+        Callback = function(v)
+            print("Toggle:", v)
         end
-        
-        -- Применение пользовательских свойств
-        for prop, value in pairs(properties or {}) do
-            obj[prop] = value
-        end
-        
-        -- Добавление детей
-        for _, child in pairs(children or {}) do
-            child.Parent = obj
-        end
-        
-        return obj
-    end
+    })
 
-    -- Создание скругленного фрейма
-    function core.NewRoundFrame(radius, frameType, properties, children)
-        local imageMap = {
-            Squircle = "rbxassetid://80999662900595",
-            SquircleOutline = "rbxassetid://117788349049947",
-            Shadow = "rbxassetid://84825982946844"
-        }
-        
-        local obj = core.New("ImageLabel", {
-            Image = imageMap[frameType] or imageMap.Squircle,
-            ScaleType = "Slice",
-            SliceCenter = Rect.new(256, 256, 256, 256),
-            SliceScale = 1,
-            BackgroundTransparency = 1,
-        }, children)
-        
-        -- Применение пользовательских свойств
-        for prop, value in pairs(properties or {}) do
-            obj[prop] = value
-        end
-        
-        -- Функция для обновления скругления
-        local function updateSliceScale()
-            local scale = radius / 256
-            obj.SliceScale = math.max(scale, 0.0001)
-        end
-        
-        updateSliceScale()
-        
-        return obj
-    end
-
-    -- Анимации
-    function core.Tween(object, duration, properties, easingStyle, easingDirection)
-        easingStyle = easingStyle or Enum.EasingStyle.Quad
-        easingDirection = easingDirection or Enum.EasingDirection.Out
-        
-        local tweenInfo = TweenInfo.new(duration, easingStyle, easingDirection)
-        return TweenService:Create(object, tweenInfo, properties)
-    end
-
-    -- Плавное появление
-    function core.FadeIn(object, duration)
-        object.Visible = true
-        return core.Tween(object, duration, {BackgroundTransparency = 0})
-    end
-
-    -- Плавное исчезновение  
-    function core.FadeOut(object, duration)
-        local tween = core.Tween(object, duration, {BackgroundTransparency = 1})
-        tween.Completed:Connect(function()
-            object.Visible = false
-        end)
-        return tween
-    end
-
-    -- Анимация скейла
-    function core.Scale(object, duration, targetScale)
-        return core.Tween(object, duration, {Size = targetScale})
-    end
-
-    -- Анимация позиции
-    function core.Move(object, duration, targetPosition)
-        return core.Tween(object, duration, {Position = targetPosition})
-    end
-
-    -- Добавление сигнала
-    function core.AddSignal(signal, callback)
-        local connection = signal:Connect(callback)
-        table.insert(core.Signals, connection)
-        return connection
-    end
-
-    -- Безопасный вызов колбэка
-    function core.SafeCallback(callback, ...)
-        if callback then
-            local success, result = pcall(callback, ...)
-            if not success then
-                warn("[SimpleUI] Callback error:", result)
-            end
-        end
-    end
-
-    -- Создание окна
-    function core.CreateWindow(title, size, position)
-        local screenGui = core.New("ScreenGui", {
-            Name = "SimpleUI",
-            ResetOnSpawn = false,
-            ZIndexBehavior = "Sibling"
-        })
-        
-        local mainFrame = core.NewRoundFrame(15, "Squircle", {
-            Name = "MainWindow",
-            Size = size or UDim2.new(0, 400, 0, 300),
-            Position = position or UDim2.new(0.5, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundColor3 = Color3.fromHex("#1a1a1a"),
-            Parent = screenGui
-        })
-        
-        -- Заголовок окна
-        local titleBar = core.New("Frame", {
-            Name = "TitleBar",
-            Size = UDim2.new(1, 0, 0, 30),
-            BackgroundTransparency = 1,
-            Parent = mainFrame
-        }, {
-            core.New("TextLabel", {
-                Name = "Title",
-                Size = UDim2.new(1, -60, 1, 0),
-                Position = UDim2.new(0, 10, 0, 0),
-                Text = title or "SimpleUI Window",
-                TextColor3 = Color3.fromHex("#ffffff"),
-                TextSize = 16,
-                TextXAlignment = "Left",
-                BackgroundTransparency = 1
-            }),
-            core.New("TextButton", {
-                Name = "CloseButton",
-                Size = UDim2.new(0, 20, 0, 20),
-                Position = UDim2.new(1, -25, 0, 5),
-                Text = "X",
-                TextColor3 = Color3.fromHex("#ffffff"),
-                BackgroundColor3 = Color3.fromHex("#e53935"),
-                Parent = mainFrame
+    -- Button
+    Tab:Button({
+        Title = "Run Action",
+        Desc = "Click to perform something",
+        Callback = function()
+            print("Button clicked!")
+            Window:Notify({
+                Title = "Button",
+                Desc = "Action performed successfully.",
+                Time = 3
             })
-        })
-        
-        -- Контентная область
-        local contentFrame = core.New("ScrollingFrame", {
-            Name = "Content",
-            Size = UDim2.new(1, -20, 1, -50),
-            Position = UDim2.new(0, 10, 0, 40),
-            BackgroundTransparency = 1,
-            Parent = mainFrame
-        }, {
-            core.New("UIListLayout", {
-                SortOrder = "LayoutOrder",
-                Padding = UDim.new(0, 5)
-            })
-        })
-        
-        local window = {
-            ScreenGui = screenGui,
-            MainFrame = mainFrame,
-            ContentFrame = contentFrame,
-            TitleBar = titleBar
-        }
-        
-        -- Анимация открытия
-        function window:Open()
-            screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-            mainFrame.Visible = true
-            mainFrame.BackgroundTransparency = 1
-            mainFrame.Size = UDim2.new(0, 10, 0, 10)
-            
-            local tween1 = core.Tween(mainFrame, 0.3, {
-                BackgroundTransparency = 0,
-                Size = size or UDim2.new(0, 400, 0, 300)
-            }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            
-            tween1:Play()
         end
-        
-        -- Анимация закрытия
-        function window:Close()
-            local tween = core.Tween(mainFrame, 0.2, {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 10, 0, 10)
-            }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            
-            tween:Play()
-            tween.Completed:Connect(function()
-                screenGui:Destroy()
-            end)
-        end
-        
-        -- Обработчик закрытия
-        core.AddSignal(titleBar.CloseButton.MouseButton1Click, function()
-            window:Close()
-        end)
-        
-        return window
-    end
+    })
 
-    -- Создание кнопки
-    function core.CreateButton(text, size, parent, callback)
-        local button = core.New("TextButton", {
-            Size = size or UDim2.new(1, -20, 0, 40),
-            BackgroundColor3 = Color3.fromHex("#315dff"),
-            TextColor3 = Color3.fromHex("#ffffff"),
-            Text = text or "Button",
-            TextSize = 14,
-            Parent = parent
-        })
-        
-        core.NewRoundFrame(8, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = button
-        })
-        
-        -- Анимации наведения
-        core.AddSignal(button.MouseEnter, function()
-            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#1e40ff")}):Play()
-        end)
-        
-        core.AddSignal(button.MouseLeave, function()
-            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
-        end)
-        
-        core.AddSignal(button.MouseButton1Click, function()
-            -- Анимация нажатия
-            core.Tween(button, 0.05, {BackgroundColor3 = Color3.fromHex("#1e3a8a")}):Play()
-            core.Tween(button, 0.1, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
-            
-            core.SafeCallback(callback)
-        end)
-        
-        return button
-    end
+    -- Textbox
+    Tab:Textbox({
+        Title = "Input Text",
+        Desc = "Type something here",
+        Placeholder = "Enter value",
+        Value = "",
+        ClearTextOnFocus = false,
+        Callback = function(text)
+            print("Textbox value:", text)
+        end
+    })
 
-    -- Создание переключателя
-    function core.CreateToggle(text, parent, callback)
-        local toggleFrame = core.New("Frame", {
-            Size = UDim2.new(1, -20, 0, 30),
-            BackgroundTransparency = 1,
-            Parent = parent
-        }, {
-            core.New("TextLabel", {
-                Size = UDim2.new(1, -50, 1, 0),
-                Text = text or "Toggle",
-                TextColor3 = Color3.fromHex("#ffffff"),
-                TextSize = 14,
-                TextXAlignment = "Left",
-                BackgroundTransparency = 1
-            })
-        })
-        
-        local toggleButton = core.New("TextButton", {
-            Size = UDim2.new(0, 40, 0, 20),
-            Position = UDim2.new(1, -45, 0, 5),
-            BackgroundColor3 = Color3.fromHex("#666666"),
-            Text = "",
-            Parent = toggleFrame
-        })
-        
-        core.NewRoundFrame(10, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = toggleButton
-        })
-        
-        local toggleDot = core.New("Frame", {
-            Size = UDim2.new(0, 12, 0, 12),
-            Position = UDim2.new(0, 4, 0.5, 0),
-            AnchorPoint = Vector2.new(0, 0.5),
-            BackgroundColor3 = Color3.fromHex("#ffffff"),
-            Parent = toggleButton
-        })
-        
-        core.NewRoundFrame(6, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = toggleDot
-        })
-        
-        local isToggled = false
-        
-        local function updateToggle()
-            if isToggled then
-                core.Tween(toggleButton, 0.2, {BackgroundColor3 = Color3.fromHex("#315dff")}):Play()
-                core.Tween(toggleDot, 0.2, {Position = UDim2.new(1, -16, 0.5, 0)}):Play()
-            else
-                core.Tween(toggleButton, 0.2, {BackgroundColor3 = Color3.fromHex("#666666")}):Play()
-                core.Tween(toggleDot, 0.2, {Position = UDim2.new(0, 4, 0.5, 0)}):Play()
-            end
+    -- Slider
+    Tab:Slider({
+        Title = "Set Speed",
+        Min = 0,
+        Max = 100,
+        Rounding = 0,
+        Value = 25,
+        Callback = function(val)
+            print("Slider:", val)
         end
-        
-        core.AddSignal(toggleButton.MouseButton1Click, function()
-            isToggled = not isToggled
-            updateToggle()
-            core.SafeCallback(callback, isToggled)
-        end)
-        
-        function toggleFrame:Set(value)
-            isToggled = value
-            updateToggle()
-        end
-        
-        function toggleFrame:Get()
-            return isToggled
-        end
-        
-        return toggleFrame
-    end
+    })
 
-    -- Создание слайдера
-    function core.CreateSlider(text, min, max, parent, callback)
-        local sliderFrame = core.New("Frame", {
-            Size = UDim2.new(1, -20, 0, 50),
-            BackgroundTransparency = 1,
-            Parent = parent
-        }, {
-            core.New("TextLabel", {
-                Size = UDim2.new(1, 0, 0, 20),
-                Text = text or "Slider",
-                TextColor3 = Color3.fromHex("#ffffff"),
-                TextSize = 14,
-                TextXAlignment = "Left",
-                BackgroundTransparency = 1
-            })
-        })
-        
-        local sliderTrack = core.New("Frame", {
-            Size = UDim2.new(1, 0, 0, 6),
-            Position = UDim2.new(0, 0, 1, -15),
-            BackgroundColor3 = Color3.fromHex("#444444"),
-            Parent = sliderFrame
-        })
-        
-        core.NewRoundFrame(3, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = sliderTrack
-        })
-        
-        local sliderFill = core.New("Frame", {
-            Size = UDim2.new(0.5, 0, 1, 0),
-            BackgroundColor3 = Color3.fromHex("#315dff"),
-            Parent = sliderTrack
-        })
-        
-        core.NewRoundFrame(3, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = sliderFill
-        })
-        
-        local sliderThumb = core.New("TextButton", {
-            Size = UDim2.new(0, 16, 0, 16),
-            Position = UDim2.new(0.5, -8, 0.5, -8),
-            BackgroundColor3 = Color3.fromHex("#ffffff"),
-            Text = "",
-            Parent = sliderTrack
-        })
-        
-        core.NewRoundFrame(8, "Squircle", {
-            Size = UDim2.new(1, 0, 1, 0),
-            Parent = sliderThumb
-        })
-        
-        local valueLabel = core.New("TextLabel", {
-            Size = UDim2.new(0, 60, 0, 20),
-            Position = UDim2.new(1, -65, 0, 0),
-            Text = "50",
-            TextColor3 = Color3.fromHex("#ffffff"),
-            TextSize = 14,
-            BackgroundTransparency = 1,
-            Parent = sliderFrame
-        })
-        
-        local currentValue = 50
-        local isDragging = false
-        
-        local function updateSlider(value)
-            currentValue = math.clamp(value, min or 0, max or 100)
-            local percentage = (currentValue - (min or 0)) / ((max or 100) - (min or 0))
-            
-            core.Tween(sliderFill, 0.1, {Size = UDim2.new(percentage, 0, 1, 0)}):Play()
-            core.Tween(sliderThumb, 0.1, {Position = UDim2.new(percentage, -8, 0.5, -8)}):Play()
-            
-            valueLabel.Text = tostring(math.floor(currentValue))
-            core.SafeCallback(callback, currentValue)
+    -- Dropdown
+    Tab:Dropdown({
+        Title = "Choose Option",
+        List = {"Option 1", "Option 2", "Option 3"},
+        Value = "Option 1",
+        Callback = function(choice)
+            print("Selected:", choice)
         end
-        
-        core.AddSignal(sliderThumb.MouseButton1Down, function()
-            isDragging = true
-        end)
-        
-        core.AddSignal(UserInputService.InputEnded, function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                isDragging = false
-            end
-        end)
-        
-        core.AddSignal(UserInputService.InputChanged, function(input)
-            if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local mousePos = UserInputService:GetMouseLocation()
-                local trackPos = sliderTrack.AbsolutePosition
-                local trackSize = sliderTrack.AbsoluteSize
-                
-                local relativeX = (mousePos.X - trackPos.X) / trackSize.X
-                relativeX = math.clamp(relativeX, 0, 1)
-                
-                local newValue = (min or 0) + relativeX * ((max or 100) - (min or 0))
-                updateSlider(newValue)
-            end
-        end)
-        
-        function sliderFrame:Set(value)
-            updateSlider(value)
-        end
-        
-        function sliderFrame:Get()
-            return currentValue
-        end
-        
-        updateSlider(currentValue)
-        
-        return sliderFrame
-    end
+    })
 
-    return core
+    -- Code Display
+    local CodeBlock = Tab:Code({
+        Title = "Example Code",
+        Code = "-- This is a code preview\nprint('Hello world')"
+    })
+
+    -- Simulate update
+    task.delay(5, function()
+        CodeBlock:SetCode("-- Updated!\nprint('New content loaded')")
+    end)
 end
 
--- Модуль уведомлений
-function SimpleUI.notifications()
-    local notifications = {
-        Notifications = {},
-        NotificationIndex = 0
-    }
-    
-    function notifications.Init(parent)
-        local holder = SimpleUI.load("core").New("Frame", {
-            Position = UDim2.new(1, -20, 0, 20),
-            AnchorPoint = Vector2.new(1, 0),
-            Size = UDim2.new(0, 300, 1, -100),
-            BackgroundTransparency = 1,
-            Parent = parent
-        }, {
-            SimpleUI.load("core").New("UIListLayout", {
-                HorizontalAlignment = "Center",
-                SortOrder = "LayoutOrder",
-                VerticalAlignment = "Bottom",
-                Padding = UDim.new(0, 8)
-            })
-        })
-        
-        notifications.Holder = holder
-        return holder
-    end
-    
-    function notifications.New(params)
-        local core = SimpleUI.load("core")
-        local notification = {
-            Title = params.Title or "Notification",
-            Content = params.Content,
-            Duration = params.Duration or 5,
-            Icon = params.Icon
-        }
-        
-        notifications.NotificationIndex = notifications.NotificationIndex + 1
-        notifications.Notifications[notifications.NotificationIndex] = notification
-        
-        local notificationFrame = core.NewRoundFrame(10, "Squircle", {
-            Size = UDim2.new(1, 0, 0, 0),
-            Position = UDim2.new(0, 0, 1, 0),
-            AnchorPoint = Vector2.new(0, 1),
-            AutomaticSize = "Y",
-            BackgroundColor3 = Color3.fromHex("#1a1a1a"),
-            Parent = notifications.Holder
-        }, {
-            core.New("UIPadding", {
-                PaddingTop = UDim.new(0, 10),
-                PaddingLeft = UDim.new(0, 10),
-                PaddingRight = UDim.new(0, 10),
-                PaddingBottom = UDim.new(0, 10)
-            }),
-            core.New("UIListLayout", {
-                Padding = UDim.new(0, 5),
-                FillDirection = "Vertical"
-            }),
-            core.New("TextLabel", {
-                Text = notification.Title,
-                TextColor3 = Color3.fromHex("#ffffff"),
-                TextSize = 16,
-                TextXAlignment = "Left",
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 20)
-            })
-        })
-        
-        if notification.Content then
-            core.New("TextLabel", {
-                Text = notification.Content,
-                TextColor3 = Color3.fromHex("#cccccc"),
-                TextSize = 14,
-                TextXAlignment = "Left",
-                TextWrapped = true,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                AutomaticSize = "Y",
-                Parent = notificationFrame
+-- Line Separator
+Window:Line()
+
+-- Another Tab Example
+local Extra = Window:Tab({Title = "Extra", Icon = "tag"}) do
+    Extra:Section({Title = "About"})
+    Extra:Button({
+        Title = "Show Message",
+        Desc = "Display a popup",
+        Callback = function()
+            Window:Notify({
+                Title = "Fluent UI",
+                Desc = "Everything works fine!",
+                Time = 3
             })
         end
-        
-        -- Анимация появления
-        notificationFrame.Size = UDim2.new(1, 0, 0, 0)
-        core.Tween(notificationFrame, 0.3, {
-            Size = UDim2.new(1, 0, 0, notificationFrame.AbsoluteContentSize.Y)
-        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
-        
-        -- Анимация исчезновения
-        if notification.Duration then
-            task.spawn(function()
-                task.wait(notification.Duration)
-                core.Tween(notificationFrame, 0.3, {
-                    Size = UDim2.new(1, 0, 0, 0),
-                    BackgroundTransparency = 1
-                }, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
-                
-                task.wait(0.3)
-                notificationFrame:Destroy()
-            end)
+    })
+end
+Window:Line()
+local Extra = Window:Tab({Title = "Settings", Icon = "wrench"}) do
+    Extra:Section({Title = "Config"})
+    Extra:Button({
+        Title = "Show Message",
+        Desc = "Display a popup",
+        Callback = function()
+            Window:Notify({
+                Title = "Fluent UI",
+                Desc = "Everything works fine!",
+                Time = 3
+            })
         end
-        
-        function notification:Close()
-            core.Tween(notificationFrame, 0.3, {
-                Size = UDim2.new(1, 0, 0, 0),
-                BackgroundTransparency = 1
-            }, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
-            
-            task.wait(0.3)
-            notificationFrame:Destroy()
-        end
-        
-        return notification
-    end
-    
-    return notifications
+    })
 end
-
--- Основная функция для использования библиотеки
-function SimpleUI:CreateWindow(title, size, position)
-    local core = SimpleUI.load("core")
-    return core.CreateWindow(title, size, position)
-end
-
-function SimpleUI:Notify(params)
-    local notifications = SimpleUI.load("notifications")
-    return notifications.New(params)
-end
-
--- Инициализация библиотеки
-function SimpleUI:Init()
-    -- Загружаем основные модули
-    SimpleUI.load("core")
-    SimpleUI.load("notifications")
-    
-    return SimpleUI
-end
-
-return SimpleUI:Init()
+-- Final Notification
+Window:Notify({
+    Title = "x2zu",
+    Desc = "All components loaded successfully! Credits leak: @x2zu",
+    Time = 4
+})
