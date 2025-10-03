@@ -6,8 +6,8 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/leshk
 
 -- Create Main Window
 local Window = Library:Window({
-    Title = "x2zu [ Stellar ]",
-    Desc = "x2zu on top",
+    Title = "Snow",
+    Desc = "Hub",
     Icon = 105059922903197,
     Theme = "Dark",
     Config = {
@@ -20,127 +20,118 @@ local Window = Library:Window({
     }
 })
 
--- Sidebar Vertical Separator
-local SidebarLine = Instance.new("Frame")
-SidebarLine.Size = UDim2.new(0, 1, 1, 0)
-SidebarLine.Position = UDim2.new(0, 140, 0, 0) -- adjust if needed
-SidebarLine.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-SidebarLine.BorderSizePixel = 0
-SidebarLine.ZIndex = 5
-SidebarLine.Name = "SidebarLine"
-SidebarLine.Parent = game:GetService("CoreGui") -- Or Window.Gui if accessible
+-- Speed Boost Module
+local SpeedBoostModule = {}
+SpeedBoostModule.Enabled = false
+SpeedBoostModule.CurrentSpeed = 16
+SpeedBoostModule.VelocityConnection = nil
+SpeedBoostModule.Player = game:GetService("Players").LocalPlayer
 
--- Tab
-local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
-    -- Section
-    Tab:Section({Title = "All UI Components"})
+function SpeedBoostModule:Enable()
+    local RunService = game:GetService('RunService')
+    
+    local character = self.Player.Character
+    if not character then return end
+    
+    self:Disable()
 
-    -- Toggle
-    Tab:Toggle({
-        Title = "Enable Feature",
-        Desc = "Toggle to enable or disable the feature",
-        Value = false,
-        Callback = function(v)
-            print("Toggle:", v)
+    self.VelocityConnection = RunService.Heartbeat:Connect(function()
+        if not self.Enabled then return end
+        
+        character = self.Player.Character
+        if not character or not character.Parent then return end
+        
+        local humanoid = character:FindFirstChild('Humanoid')
+        local rootPart = character:FindFirstChild('HumanoidRootPart')
+        
+        if humanoid and rootPart and humanoid.MoveDirection.Magnitude > 0 then
+            local moveDirection = humanoid.MoveDirection
+            local velocity = moveDirection * self.CurrentSpeed
+            rootPart.Velocity = Vector3.new(velocity.X, rootPart.Velocity.Y, velocity.Z)
         end
-    })
-
-    -- Button
-    Tab:Button({
-        Title = "Run Action",
-        Desc = "Click to perform something",
-        Callback = function()
-            print("Button clicked!")
-            Window:Notify({
-                Title = "Button",
-                Desc = "Action performed successfully.",
-                Time = 3
-            })
-        end
-    })
-
-    -- Textbox
-    Tab:Textbox({
-        Title = "Input Text",
-        Desc = "Type something here",
-        Placeholder = "Enter value",
-        Value = "",
-        ClearTextOnFocus = false,
-        Callback = function(text)
-            print("Textbox value:", text)
-        end
-    })
-
-    -- Slider
-    Tab:Slider({
-        Title = "Set Speed",
-        Min = 0,
-        Max = 100,
-        Rounding = 0,
-        Value = 25,
-        Callback = function(val)
-            print("Slider:", val)
-        end
-    })
-
-    -- Dropdown
-    Tab:Dropdown({
-        Title = "Choose Option",
-        List = {"Option 1", "Option 2", "Option 3"},
-        Value = "Option 1",
-        Callback = function(choice)
-            print("Selected:", choice)
-        end
-    })
-
-    -- Code Display
-    local CodeBlock = Tab:Code({
-        Title = "Example Code",
-        Code = "-- This is a code preview\nprint('Hello world')"
-    })
-
-    -- Simulate update
-    task.delay(5, function()
-        CodeBlock:SetCode("-- Updated!\nprint('New content loaded')")
     end)
 end
 
--- Line Separator
-Window:Line()
+function SpeedBoostModule:Disable()
+    if self.VelocityConnection then
+        self.VelocityConnection:Disconnect()
+        self.VelocityConnection = nil
+    end
+end
 
--- Another Tab Example
-local Extra = Window:Tab({Title = "Extra", Icon = "tag"}) do
-    Extra:Section({Title = "About"})
-    Extra:Button({
-        Title = "Show Message",
-        Desc = "Display a popup",
+function SpeedBoostModule:SetSpeed(speed)
+    self.CurrentSpeed = math.clamp(speed, 1, 45)
+end
+
+function SpeedBoostModule:SetEnabled(state)
+    self.Enabled = state
+    if state then
+        self:Enable()
+    else
+        self:Disable()
+    end
+end
+
+-- Обработка смены персонажа
+SpeedBoostModule.Player.CharacterAdded:Connect(function()
+    if SpeedBoostModule.Enabled then
+        SpeedBoostModule:Disable()
+        SpeedBoostModule:Enable()
+    end
+end)
+
+SpeedBoostModule.Player.CharacterRemoving:Connect(function()
+    SpeedBoostModule:Disable()
+end)
+
+-- Main Tab
+local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
+    -- Speed Boost Section
+    Tab:Section({Title = "Speed Boost"})
+
+    -- Toggle for Speed Boost
+    Tab:Toggle({
+        Title = "Enable Speed Boost",
+        Desc = "Toggle to enable or disable speed boost",
+        Value = false,
+        Callback = function(v)
+            SpeedBoostModule:SetEnabled(v)
+            print("Speed Boost:", v)
+        end
+    })
+
+    -- Slider for Speed
+    Tab:Slider({
+        Title = "Speed Value",
+        Min = 1,
+        Max = 45,
+        Rounding = 0,
+        Value = 16,
+        Callback = function(val)
+            SpeedBoostModule:SetSpeed(val)
+            print("Speed set to:", val)
+        end
+    })
+
+    -- Info Section
+    Tab:Section({Title = "Info"})
+    
+    Tab:Button({
+        Title = "Get Current Speed",
+        Desc = "Click to see current speed value",
         Callback = function()
             Window:Notify({
-                Title = "Fluent UI",
-                Desc = "Everything works fine!",
+                Title = "Current Speed",
+                Desc = "Speed: " .. tostring(SpeedBoostModule.CurrentSpeed),
                 Time = 3
             })
         end
     })
 end
-Window:Line()
-local Extra = Window:Tab({Title = "Settings", Icon = "wrench"}) do
-    Extra:Section({Title = "Config"})
-    Extra:Button({
-        Title = "Show Message",
-        Desc = "Display a popup",
-        Callback = function()
-            Window:Notify({
-                Title = "Fluent UI",
-                Desc = "Everything works fine!",
-                Time = 3
-            })
-        end
-    })
-end
+
 -- Final Notification
 Window:Notify({
-    Title = "x2zu",
-    Desc = "All components loaded successfully! Credits leak: @x2zu",
+    Title = "Speed Boost Loaded",
+    Desc = "Speed boost module has been successfully loaded!",
     Time = 4
 })
