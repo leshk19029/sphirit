@@ -12,7 +12,7 @@ local Window = Library:Window({
     Theme = "Dark",
     Config = {
         Keybind = Enum.KeyCode.LeftControl,
-        Size = UDim2.new(0, 500, 0, 400)
+        Size = UDim2.new(0, 750, 0, 650)
     },
     CloseUIButton = {
         Enabled = true,
