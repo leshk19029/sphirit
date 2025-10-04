@@ -180,16 +180,14 @@ local function DisableAntiEffects()
     AntiEffectsConnections = {}
 end
 
--- Optimized Wallhack Function
+-- Wallhack Function
 local WallhackEnabled = false
 local WallhackHighlights = {}
 local WallhackConnections = {}
-local WallhackCleanupInterval = 10 -- seconds
 
 local function EnableWallhack()
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
-    local RunService = game:GetService("RunService")
 
     local function createHighlight(character, player)
         if WallhackHighlights[player] then
@@ -197,39 +195,23 @@ local function EnableWallhack()
         end
         
         local highlight = Instance.new("Highlight")
-        highlight.Name = "WallhackHighlight"
+        highlight.Name = "Highlight"
         highlight.Adornee = character
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.FillColor = Color3.fromRGB(0, 170, 255)
         highlight.FillTransparency = 0.22
         highlight.OutlineColor = Color3.fromRGB(0, 170, 255)
         highlight.OutlineTransparency = 0.08
+        highlight.Archivable = true
         highlight.Parent = character
         
         WallhackHighlights[player] = highlight
-    end
-
-    local function cleanupStaleHighlights()
-        local removed = 0
-        for player, highlight in pairs(WallhackHighlights) do
-            if not player or not player.Parent or not player.Character then
-                if highlight then
-                    highlight:Destroy()
-                end
-                WallhackHighlights[player] = nil
-                removed = removed + 1
-            end
-        end
-        if removed > 0 then
-            print(string.format("[Wallhack] Cleaned %d stale highlights", removed))
-        end
     end
 
     local function onPlayerAdded(player)
         if player == localPlayer then return end
         
         WallhackConnections[player] = player.CharacterAdded:Connect(function(character)
-            task.wait(0.5) -- Задержка для стабилизации
             createHighlight(character, player)
         end)
         
@@ -257,44 +239,39 @@ local function EnableWallhack()
             onPlayerAdded(player)
         end
     end
-
-    -- Периодическая очистка
-    WallhackConnections.Cleanup = RunService.Heartbeat:Connect(function()
-        if not WallhackEnabled then return end
-        
-        -- Очищаем каждые N секунд
-        if tick() % WallhackCleanupInterval < 0.1 then
-            cleanupStaleHighlights()
-        end
-    end)
 end
 
--- Optimized Timer ESP Function
+local function DisableWallhack()
+    for player, highlight in pairs(WallhackHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    WallhackHighlights = {}
+    
+    for player, connection in pairs(WallhackConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    WallhackConnections = {}
+end
+
+-- Timer ESP Function
 local TimerESPEnabled = false
 local TimerESPTimers = {}
 local TimerESPConnections = {}
-local TimerESPCleanupInterval = 5 -- seconds
 
 local function EnableTimerESP()
     local Workspace = game:GetService('Workspace')
     local RunService = game:GetService('RunService')
 
-    local function cleanupStaleTimers()
-        local removed = 0
-        for hitbox, timerData in pairs(TimerESPTimers) do
-            if not hitbox or not hitbox.Parent then
-                if timerData then
-                    if timerData.Billboard then timerData.Billboard:Destroy() end
-                    if timerData.Part then timerData.Part:Destroy() end
-                    if timerData.Connection then timerData.Connection:Disconnect() end
-                end
-                TimerESPTimers[hitbox] = nil
-                removed = removed + 1
-            end
-        end
-        if removed > 0 then
-        end
+    local function CalculateYOffset(podiumCount)
+        if podiumCount > 18 then return -26.27
+        elseif podiumCount > 10 then return -17.27
+        else return -8.27 end
     end
+
     local function CreateTimerDisplay(hitbox, remainingTime)
         if not hitbox or not remainingTime then return end
 
@@ -358,6 +335,7 @@ local function EnableTimerESP()
             else
                 connection:Disconnect()
                 if timerPart then timerPart:Destroy() end
+                TimerESPTimers[hitbox] = nil
             end
         end)
 
@@ -398,6 +376,17 @@ local function EnableTimerESP()
         CreateTimerDisplay(hitbox, remainingTime)
     end
 
+    local function CleanupMissingPlots()
+        for hitbox, timerData in pairs(TimerESPTimers) do
+            if not hitbox or not hitbox.Parent then
+                if timerData.Billboard then timerData.Billboard:Destroy() end
+                if timerData.Part then timerData.Part:Destroy() end
+                if timerData.Connection then timerData.Connection:Disconnect() end
+                TimerESPTimers[hitbox] = nil
+            end
+        end
+    end
+
     -- Initialize existing plots
     local Plots = Workspace:FindFirstChild('Plots')
     if Plots then
@@ -413,20 +402,13 @@ local function EnableTimerESP()
         end)
 
         TimerESPConnections.PlotsRemoved = Plots.ChildRemoved:Connect(function(plot)
-            -- Clean up timers when plot is removed
-            for hitbox, timerData in pairs(TimerESPTimers) do
-                if hitbox and hitbox.Parent == plot then
-                    if timerData.Billboard then timerData.Billboard:Destroy() end
-                    if timerData.Part then timerData.Part:Destroy() end
-                    if timerData.Connection then timerData.Connection:Disconnect() end
-                    TimerESPTimers[hitbox] = nil
-                end
-            end
+            CleanupMissingPlots()
         end)
     end
 
     -- Performance optimization heartbeat
     TimerESPConnections.Heartbeat = RunService.Heartbeat:Connect(function()
+        CleanupMissingPlots()
         for hitbox, timerData in pairs(TimerESPTimers) do
             if hitbox and hitbox.Parent and timerData.Part then
                 local plot = hitbox.Parent
@@ -438,14 +420,6 @@ local function EnableTimerESP()
                     timerData.CurrentOffset = newYOffset
                     timerData.Part.CFrame = hitbox.CFrame * CFrame.new(0, newYOffset, 0)
                 end
-            else
-                -- Clean up if hitbox no longer exists
-                if timerData then
-                    if timerData.Billboard then timerData.Billboard:Destroy() end
-                    if timerData.Part then timerData.Part:Destroy() end
-                    if timerData.Connection then timerData.Connection:Disconnect() end
-                end
-                TimerESPTimers[hitbox] = nil
             end
         end
     end)
@@ -465,16 +439,6 @@ local function DisableTimerESP()
         if connection then connection:Disconnect() end
     end
     TimerESPConnections = {}
-end
-
-    -- Периодическая очистка
-    TimerESPConnections.Cleanup = RunService.Heartbeat:Connect(function()
-        if not TimerESPEnabled then return end
-        
-        if tick() % TimerESPCleanupInterval < 0.1 then
-            cleanupStaleTimers()
-        end
-    end)
 end
 
 -- Nametags ESP Function
@@ -2791,7 +2755,7 @@ local function EnableInvisibilitySteal()
         updateCharacterReferences()
         setupDeathTracking()
         setupKeyBind()
-        createUI() -- Добавлен вызов создания UI
+        createUI() -- Добавляем создание UI
         
         characterAddedConnection =
             LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
@@ -2821,13 +2785,11 @@ end
 
 -- Float Module
 local FloatModule = {}
-FloatModule.Enabled = false
-FloatModule.FlightEnabled = false
-FloatModule.HeightLimitEnabled = true
-FloatModule.ScreenGui = nil
-FloatModule.Connections = {}
+local FloatEnabled = false
+local FloatGUI = nil
+local FloatConnections = {}
 
-function FloatModule:Enable()
+local function EnableFloat()
     local Player = game:GetService('Players').LocalPlayer
     local UIS = game:GetService('UserInputService')
     local RunService = game:GetService('RunService')
@@ -2839,8 +2801,10 @@ function FloatModule:Enable()
     local WALK_SPEED = 16
     local MAX_HEIGHT_GAIN = 21.8
     local isFlying = false
+    local heightLimitEnabled = true  -- По умолчанию включено
     local currentHeightGain = 0
     local scriptActive = true
+    local flightEnabled = false  -- По умолчанию выключено
 
     -- Create interface
     local screenGui = Instance.new('ScreenGui')
@@ -2849,6 +2813,7 @@ function FloatModule:Enable()
 
     local frame = Instance.new('Frame')
     frame.Size = UDim2.new(0, 200, 0, 100)
+    -- Позиция слева экрана с отступом 10 пикселей от края
     frame.Position = UDim2.new(0, 10, 0.2, 0)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.BackgroundTransparency = 0.3
@@ -2864,8 +2829,8 @@ function FloatModule:Enable()
     local flightToggle = Instance.new('TextButton')
     flightToggle.Size = UDim2.new(0, 80, 0, 30)
     flightToggle.Position = UDim2.new(0.1, 0, 0.1, 0)
-    flightToggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-    flightToggle.Text = 'Flight: OFF'
+    flightToggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)  -- Красный, так как выключено по умолчанию
+    flightToggle.Text = 'Flight: OFF'  -- Текст OFF по умолчанию
     flightToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
     flightToggle.Font = Enum.Font.GothamBold
     flightToggle.TextSize = 12
@@ -2874,8 +2839,8 @@ function FloatModule:Enable()
     local toggle = Instance.new('TextButton')
     toggle.Size = UDim2.new(0, 80, 0, 30)
     toggle.Position = UDim2.new(0.1, 0, 0.5, 0)
-    toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    toggle.Text = 'Limit: ON'
+    toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)  -- Зеленый цвет, так как включено по умолчанию
+    toggle.Text = 'Limit: ON'  -- Текст ON по умолчанию
     toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
     toggle.Font = Enum.Font.GothamBold
     toggle.TextSize = 12
@@ -2902,31 +2867,38 @@ function FloatModule:Enable()
         local viewportSize = workspace.CurrentCamera.ViewportSize
         local scaleFactor = math.min(viewportSize.X / 1920, viewportSize.Y / 1080) * 0.8
         
+        -- Базовые размеры
         local baseWidth = 200
         local baseHeight = 100
         local baseTextSize = 12
         
-        local adaptiveWidth = math.max(baseWidth * scaleFactor, 200)
-        local adaptiveHeight = math.max(baseHeight * scaleFactor, 120)
-        local adaptiveTextSize = math.max(baseTextSize * scaleFactor, 14)
+        -- Адаптивные размеры
+        local adaptiveWidth = math.max(baseWidth * scaleFactor, 200)  -- Минимальная ширина 150
+        local adaptiveHeight = math.max(baseHeight * scaleFactor, 120)  -- Минимальная высота 80
+        local adaptiveTextSize = math.max(baseTextSize * scaleFactor, 14)  -- Минимальный размер текста 10
         
+        -- Применяем размеры к фрейму
         frame.Size = UDim2.new(0, adaptiveWidth, 0, adaptiveHeight)
         
-        local buttonWidth = adaptiveWidth * 0.40
-        local buttonHeight = adaptiveHeight * 0.30
+        -- Применяем размеры к кнопкам
+        local buttonWidth = adaptiveWidth * 0.40  -- 40% от ширины фрейма
+        local buttonHeight = adaptiveHeight * 0.30  -- 30% от высоты фрейма
         
         flightToggle.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
         toggle.Size = UDim2.new(0, buttonWidth, 0, buttonHeight)
         
+        -- Позиционируем кнопки
         flightToggle.Position = UDim2.new(0.1, 0, 0.1, 0)
         toggle.Position = UDim2.new(0.1, 0, 0.5, 0)
         bindLabel.Position = UDim2.new(0.1, 0, 0.8, 0)
         
+        -- Обновляем размер текста
         flightToggle.TextSize = adaptiveTextSize
         toggle.TextSize = adaptiveTextSize
         bindLabel.TextSize = adaptiveTextSize - 2
     end
 
+    -- Вызываем при создании и при изменении размера экрана
     updateUISize()
     workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateUISize)
 
@@ -3000,16 +2972,18 @@ function FloatModule:Enable()
 
     -- Функция переключения полета
     local function toggleFlight()
-        self.FlightEnabled = not self.FlightEnabled
-        if self.FlightEnabled then
+        flightEnabled = not flightEnabled
+        if flightEnabled then
             flightToggle.Text = 'Flight: ON'
             flightToggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
             setWalkSpeed()
+            print("Flight: ENABLED")
         else
             flightToggle.Text = 'Flight: OFF'
             flightToggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
             resetVelocity()
             isFlying = false
+            print("Flight: DISABLED")
         end
     end
 
@@ -3018,8 +2992,8 @@ function FloatModule:Enable()
 
     -- Height limit toggle handler
     toggle.MouseButton1Click:Connect(function()
-        self.HeightLimitEnabled = not self.HeightLimitEnabled
-        if self.HeightLimitEnabled then
+        heightLimitEnabled = not heightLimitEnabled
+        if heightLimitEnabled then
             toggle.Text = 'Limit: ON'
             toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
         else
@@ -3029,28 +3003,30 @@ function FloatModule:Enable()
     end)
 
     -- ========== БИНД НА КЛАВИШУ C ==========
-    self.Connections.InputBegan = UIS.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
+    local inputBeganConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end -- Игнорируем если игра обрабатывает ввод
         
+        -- Бинд на C для переключения полета
         if input.KeyCode == Enum.KeyCode.C then
             toggleFlight()
         end
         
-        if input.KeyCode == Enum.KeyCode.Space and self.FlightEnabled then
+        -- Управление полетом пробелом (работает только когда полет включен)
+        if input.KeyCode == Enum.KeyCode.Space and flightEnabled then
             isFlying = true
         end
     end)
 
     -- Space release handler
-    self.Connections.InputEnded = UIS.InputEnded:Connect(function(input)
-        if input.KeyCode == Enum.KeyCode.Space and self.FlightEnabled then
+    local inputEndedConnection = UIS.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.Space and flightEnabled then
             isFlying = false
         end
     end)
 
     -- Main flight function
     local function fly()
-        if not scriptActive or not self.FlightEnabled then
+        if not scriptActive or not flightEnabled then
             return
         end
 
@@ -3064,7 +3040,7 @@ function FloatModule:Enable()
         end
 
         if isFlying then
-            if self.HeightLimitEnabled then
+            if heightLimitEnabled then
                 if currentHeightGain < MAX_HEIGHT_GAIN then
                     local remainingGain = MAX_HEIGHT_GAIN - currentHeightGain
                     local actualSpeed = math.min(FLY_SPEED, remainingGain * 10)
@@ -3087,757 +3063,247 @@ function FloatModule:Enable()
     end
 
     -- Main loop
-    self.Connections.Heartbeat = RunService.Heartbeat:Connect(function()
-        if self.FlightEnabled then
+    local heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if flightEnabled then
             fly()
         end
     end)
 
-    -- Set initial walk speed
+    -- Set initial walk speed (но полет выключен)
     setWalkSpeed()
 
-    self.ScreenGui = screenGui
+    -- Сохраняем соединения
+    FloatConnections.InputBegan = inputBeganConnection
+    FloatConnections.InputEnded = inputEndedConnection
+    FloatConnections.Heartbeat = heartbeatConnection
+    FloatGUI = screenGui
+
+    print("Float Module loaded! Bind: C (Toggle Flight) - Flight is OFF by default")
 end
 
-function FloatModule:Disable()
-    if self.ScreenGui then
-        self.ScreenGui:Destroy()
-        self.ScreenGui = nil
+local function DisableFloat()
+    if FloatGUI then
+        FloatGUI:Destroy()
+        FloatGUI = nil
     end
     
-    for _, connection in pairs(self.Connections) do
+    for _, connection in pairs(FloatConnections) do
         if connection then
             connection:Disconnect()
         end
     end
-    self.Connections = {}
-    
-    self.FlightEnabled = false
-    self.HeightLimitEnabled = true
+    FloatConnections = {}
 end
 
-function FloatModule:SetEnabled(state)
-    self.Enabled = state
-    if state then
-        self:Enable()
-    else
-        self:Disable()
-    end
-end
+-- Xray Function
+local XrayEnabled = false
+local XrayConnections = {}
+local XrayOriginalTransparency = {}
 
--- Xray Module (Fixed Version)
-local XrayModule = {}
-XrayModule.Enabled = false
-XrayModule.TransparencyValue = 0.7
-XrayModule.SpecialObjectsEnabled = true
-XrayModule.OriginalTransparency = {}
-XrayModule.Connections = {}
-XrayModule.ActivePlots = {}
-XrayModule.CleanupInterval = 30 -- seconds
-
--- Списки объектов для оптимизации
-local ALWAYS_TRANSPARENT_OBJECTS = {
-    "AnimalTarget", "DeliveryHitbox", "MainRoot", "Multiplier", 
-    "PlotSign", "Slope", "Spawn", "StealHitbox"
-}
-
-local ALLOWED_OBJECTS = {
-    "AnimalPodiums", "Decorations", "InvisibleWalls", "Laser", 
-    "LaserHitbox", "Purchases", "Unlock", "FriendPanel", "Model"
-}
-
--- Кэш для быстрой проверки
-local AlwaysTransparentCache = {}
-local AllowedCache = {}
-
--- Инициализация кэшей
-for _, name in ipairs(ALWAYS_TRANSPARENT_OBJECTS) do
-    AlwaysTransparentCache[name] = true
-end
-
-for _, name in ipairs(ALLOWED_OBJECTS) do
-    AllowedCache[name] = true
-end
-
--- Функция для проверки разрешенных объектов (оптимизированная)
-local function IsObjectAllowed(objectName)
-    return AllowedCache[objectName] == true
-end
-
--- Функция для проверки специальных объектов (оптимизированная)
-local function IsSpecialObject(objectName)
-    return AlwaysTransparentCache[objectName] == true
-end
-
--- Основная функция установки прозрачности с оптимизацией
-local function SetPlotTransparency(plot)
-    if not plot or not XrayModule.Enabled then
-        return
-    end
-    
-    local processedObjects = {}
-    
-    local function processDescendants(parent)
-        for _, descendant in ipairs(parent:GetDescendants()) do
-            if descendant ~= plot and descendant:IsA("BasePart") then
-                -- Быстрая проверка через кэш
-                local isAllowedObject = IsObjectAllowed(descendant.Name)
-                
-                -- Если объект не разрешен, проверяем родителей
-                if not isAllowedObject then
-                    local currentParent = descendant.Parent
-                    local hasAllowedParent = false
-                    
-                    while currentParent and currentParent ~= plot do
-                        if IsObjectAllowed(currentParent.Name) then
-                            hasAllowedParent = true
-                            break
-                        end
-                        currentParent = currentParent.Parent
-                    end
-                    
-                    if not hasAllowedParent then
-                        continue
-                    end
-                end
-                
-                -- Определяем тип объекта
-                local isSpecialObject = IsSpecialObject(descendant.Name)
-                local isAnimalPodium = false
-                local isPurchases = false
-                local isDecorationWithoutStructure = false
-                
-                -- Проверяем AnimalPodiums и Purchases
-                local current = descendant
-                while current and current ~= plot do
-                    if current.Name == "AnimalPodiums" then
-                        isAnimalPodium = true
-                        break
-                    elseif current.Name == "Purchases" then
-                        isPurchases = true
-                        break
-                    end
-                    current = current.Parent
-                end
-                
-                -- Проверяем Decorations
-                local decorationModel = descendant:FindFirstAncestorOfClass("Model")
-                if decorationModel then
-                    local isInDecorations = false
-                    local currentCheck = decorationModel
-                    
-                    while currentCheck and currentCheck ~= plot do
-                        if currentCheck.Name == "Decorations" then
-                            isInDecorations = true
-                            break
-                        end
-                        currentCheck = currentCheck.Parent
-                    end
-                    
-                    if isInDecorations then
-                        local structureBaseHome = decorationModel:FindFirstChild("structure base home")
-                        if not structureBaseHome then
-                            structureBaseHome = decorationModel:FindFirstChild("structure base home", true)
-                        end
-                        isDecorationWithoutStructure = not structureBaseHome
-                    end
-                end
-                
-                -- Сохраняем оригинальную прозрачность
-                if not XrayModule.OriginalTransparency[descendant] then
-                    XrayModule.OriginalTransparency[descendant] = descendant.Transparency
-                end
-                
-                -- Устанавливаем прозрачность
-                if descendant.Name == "PlotSign" then
-                    descendant.Transparency = 1
-                elseif (isSpecialObject and XrayModule.SpecialObjectsEnabled) or 
-                       isAnimalPodium or isPurchases or isDecorationWithoutStructure then
-                    descendant.Transparency = 1
-                else
-                    descendant.Transparency = XrayModule.TransparencyValue
-                end
-                
-                table.insert(processedObjects, descendant)
-            end
-        end
-    end
-    
-    processDescendants(plot)
-    XrayModule.ActivePlots[plot] = processedObjects
-end
-
--- Функция восстановления прозрачности с очисткой
-local function RestorePlotTransparency(plot)
-    if not plot then return end
-    
-    local objectsToRemove = {}
-    
-    for object, originalTransparency in pairs(XrayModule.OriginalTransparency) do
-        if object and object.Parent and object:IsDescendantOf(plot) then
-            object.Transparency = originalTransparency
-            objectsToRemove[object] = true
-        elseif not object or not object.Parent then
-            objectsToRemove[object] = true
-        end
-    end
-    
-    -- Очищаем удаленные объекты
-    for object in pairs(objectsToRemove) do
-        XrayModule.OriginalTransparency[object] = nil
-    end
-    
-    XrayModule.ActivePlots[plot] = nil
-end
-
--- Функция периодической очистки
-local function CleanupStaleObjects()
-    while XrayModule.Enabled do
-        wait(XrayModule.CleanupInterval)
-        
-        local objectsToRemove = {}
-        local count = 0
-        
-        for object, originalTransparency in pairs(XrayModule.OriginalTransparency) do
-            if not object or not object.Parent then
-                objectsToRemove[object] = true
-                count = count + 1
-            end
-        end
-        
-        -- Удаляем несуществующие объекты
-        for object in pairs(objectsToRemove) do
-            XrayModule.OriginalTransparency[object] = nil
-        end
-        
-        if count > 0 then
-            print(string.format("[XRay] Cleaned up %d stale objects", count))
-        end
-    end
-end
-
--- Инициализация XRay
-local function InitializeXray()
-    local Plots = workspace:FindFirstChild('Plots')
-    if not Plots then
-        warn("[XRay] Plots folder not found!")
-        return
-    end
-    
-    -- Обработка существующих plots
-    for _, plot in pairs(Plots:GetChildren()) do
-        if plot:IsA("Model") then
-            task.spawn(SetPlotTransparency, plot)
-        end
-    end
-
-    -- Обработка новых plots
-    XrayModule.Connections.PlotsAdded = Plots.ChildAdded:Connect(function(plot)
-        if plot:IsA("Model") then
-            task.wait(0.5) -- Даем время для загрузки
-            SetPlotTransparency(plot)
-        end
-    end)
-    
-    -- Обработка удаленных plots
-    XrayModule.Connections.PlotsRemoved = Plots.ChildRemoved:Connect(function(plot)
-        RestorePlotTransparency(plot)
-    end)
-    
-    -- Запускаем очистку
-    XrayModule.Connections.Cleanup = task.spawn(CleanupStaleObjects)
-    
-    print("[XRay] Initialized successfully")
-end
-
--- Методы модуля
-function XrayModule:Enable()
-    if self.Enabled then return end
-    
-    self.Enabled = true
-    InitializeXray()
-    
-    print("[XRay] Enabled")
-end
-
-function XrayModule:Disable()
-    if not self.Enabled then return end
-    
-    self.Enabled = false
-    
-    -- Восстанавливаем все объекты
-    for plot, objects in pairs(self.ActivePlots) do
-        if plot and plot.Parent then
-            RestorePlotTransparency(plot)
-        end
-    end
-    
-    -- Очищаем соединения
-    for name, connection in pairs(self.Connections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    self.Connections = {}
-    
-    -- Очищаем таблицы
-    self.ActivePlots = {}
-    self.OriginalTransparency = {}
-    
-    print("[XRay] Disabled and cleaned up")
-end
-
-function XrayModule:SetTransparency(value)
-    local clampedValue = math.clamp(value, 0, 1)
-    
-    if math.abs(self.TransparencyValue - clampedValue) < 0.01 then
-        return -- Изменение слишком маленькое
-    end
-    
-    self.TransparencyValue = clampedValue
-    
-    if self.Enabled then
-        -- Применяем новую прозрачность ко всем активным объектам
-        for plot, objects in pairs(self.ActivePlots) do
-            if plot and plot.Parent then
-                for _, object in ipairs(objects) do
-                    if object and object.Parent then
-                        local isSpecial = IsSpecialObject(object.Name)
-                        if not isSpecial or not self.SpecialObjectsEnabled then
-                            object.Transparency = self.TransparencyValue
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    print(string.format("[XRay] Transparency set to %.2f", self.TransparencyValue))
-end
-
-function XrayModule:ToggleSpecialObjects()
-    self.SpecialObjectsEnabled = not self.SpecialObjectsEnabled
-    
-    if self.Enabled then
-        -- Обновляем прозрачность для специальных объектов
-        for plot, objects in pairs(self.ActivePlots) do
-            if plot and plot.Parent then
-                for _, object in ipairs(objects) do
-                    if object and object.Parent then
-                        local isSpecial = IsSpecialObject(object.Name)
-                        if isSpecial then
-                            if self.SpecialObjectsEnabled then
-                                object.Transparency = 1
-                            else
-                                object.Transparency = self.TransparencyValue
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    print("[XRay] Special objects: " .. (self.SpecialObjectsEnabled and "ON" or "OFF"))
-    return self.SpecialObjectsEnabled
-end
-
--- Автоматическая очистка при выходе
-game:GetService("Players").LocalPlayer.AncestryChanged:Connect(function(_, parent)
-    if not parent then
-        XrayModule:Disable()
-    end
-end)
-
-return XrayModule
-
--- Grapple Speed Module
-local GrappleSpeedModule = {}
-GrappleSpeedModule.Enabled = false
-GrappleSpeedModule.CurrentSpeed = 140
-GrappleSpeedModule.ScreenGui = nil
-GrappleSpeedModule.Connections = {}
-
-function GrappleSpeedModule:Enable()
+local function EnableXray()
+    local Workspace = game:GetService('Workspace')
     local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local UserInputService = game:GetService("UserInputService")
-    local RunService = game:GetService("RunService")
-
-    -- Оптимизированные переменные
     local player = Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-    local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
 
-    -- Создание интерфейса
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "GreyGooUltraPro"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Parent = player:WaitForChild("PlayerGui")
+    local ALWAYS_TRANSPARENT_OBJECTS = {
+        "AnimalTarget",
+        "DeliveryHitbox", 
+        "MainRoot",
+        "Multiplier",
+        "PlotSign",
+        "Slope",
+        "Spawn",
+        "StealHitbox"
+    }
 
-    -- Основной контейнер
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Size = UDim2.new(0, 200, 0, 80)
-    MainFrame.Position = UDim2.new(0, 10, 0, 10)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    MainFrame.BackgroundTransparency = 0.1
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Active = true
+    local ALLOWED_OBJECTS = {
+        "AnimalPodiums",
+        "Decorations", 
+        "InvisibleWalls",
+        "Laser",
+        "LaserHitbox",
+        "Purchases",
+        "Unlock",
+        "FriendPanel",
+        "Model",
+        "AnimalTarget",
+        "DeliveryHitbox", 
+        "MainRoot",
+        "Multiplier",
+        "PlotSign",
+        "Slope",
+        "Spawn",
+        "StealHitbox"
+    }
 
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 8)
-    UICorner.Parent = MainFrame
-
-    -- Заголовок
-    local Title = Instance.new("TextLabel")
-    Title.Text = "Grapple Speed (Q)"
-    Title.Size = UDim2.new(1, 0, 0, 20)
-    Title.Position = UDim2.new(0, 0, 0, 0)
-    Title.BackgroundTransparency = 1
-    Title.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Title.Font = Enum.Font.GothamMedium
-    Title.TextSize = 12
-    Title.TextXAlignment = Enum.TextXAlignment.Center
-
-    -- Кнопка управления
-    local ToggleButton = Instance.new("TextButton")
-    ToggleButton.Size = UDim2.new(0.9, 0, 0, 25)
-    ToggleButton.Position = UDim2.new(0.05, 0, 0.3, 0)
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    ToggleButton.Text = "OFF"
-    ToggleButton.TextColor3 = Color3.fromRGB(220, 220, 220)
-    ToggleButton.Font = Enum.Font.Gotham
-    ToggleButton.TextSize = 11
-    ToggleButton.AutoButtonColor = false
-
-    local ButtonCorner = Instance.new("UICorner")
-    ButtonCorner.CornerRadius = UDim.new(0, 4)
-    ButtonCorner.Parent = ToggleButton
-
-    -- Поле ввода скорости
-    local SpeedInput = Instance.new("TextBox")
-    SpeedInput.Size = UDim2.new(0.9, 0, 0, 20)
-    SpeedInput.Position = UDim2.new(0.05, 0, 0.65, 0)
-    SpeedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    SpeedInput.BorderSizePixel = 0
-    SpeedInput.Text = "140"
-    SpeedInput.TextColor3 = Color3.fromRGB(220, 220, 220)
-    SpeedInput.Font = Enum.Font.Gotham
-    SpeedInput.TextSize = 11
-    SpeedInput.PlaceholderText = "Speed"
-    SpeedInput.ClearTextOnFocus = false
-
-    local InputCorner = Instance.new("UICorner")
-    InputCorner.CornerRadius = UDim.new(0, 4)
-    InputCorner.Parent = SpeedInput
-
-    -- Иерархия объектов
-    Title.Parent = MainFrame
-    ToggleButton.Parent = MainFrame
-    SpeedInput.Parent = MainFrame
-    MainFrame.Parent = ScreenGui
-
-    -- Настройки
-    local MAX_SPEED = 190
-    local MIN_SPEED = 16
-    local allFeaturesActive = false
-    local isDragging = false
-    local dragStart
-    local startPos
-
-    -- Функция для взятия GrappleHook
-    local function takeGrappleHook()
-        local backpack = player:FindFirstChild("Backpack")
-        if not backpack then
-            return false
-        end
-        
-        -- Ищем GrappleHook
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and (tool.Name:lower():find("grapple") or tool.Name:lower():find("hook")) then
-                local character = player.Character
-                if character then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid then
-                        humanoid:EquipTool(tool)
-                        return true
-                    end
-                end
-            end
-        end
-        
-        return false
-    end
-
-    -- Функция проверки, есть ли GrappleHook в руках
-    local function hasGrappleHookEquipped()
-        local character = player.Character
-        if not character then return false end
-        
-        for _, tool in ipairs(character:GetChildren()) do
-            if tool:IsA("Tool") and (tool.Name:lower():find("grapple") or tool.Name:lower():find("hook")) then
+    local function IsObjectAllowed(objectName)
+        for _, allowedName in ipairs(ALLOWED_OBJECTS) do
+            if objectName == allowedName then
                 return true
             end
         end
-        
         return false
     end
 
-    -- Функция автоматической проверки и взятия GrappleHook
-    local function autoEquipGrappleHook()
-        while allFeaturesActive do
-            if not hasGrappleHookEquipped() then
-                takeGrappleHook()
-            end
-            task.wait(1) -- Проверяем каждую секунду
+    local function SetPlotTransparency(plot)
+        if not plot then
+            return
         end
-    end
-
-    -- Функция для плавного перемещения
-    local function updateFramePosition(input)
-        if not isDragging then return end
         
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-
-    -- Обработчики перемещения для ПК
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    isDragging = false
-                end
-            end)
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
-            updateFramePosition(input)
-        end
-    end)
-
-    -- Обработчики для мобильных устройств
-    local function startMobileDrag(input)
-        isDragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-    end
-
-    local function endMobileDrag()
-        isDragging = false
-    end
-
-    local function updateMobileDrag(input)
-        if isDragging then
-            local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end
-
-    -- Обработчики тапов для мобильных устройств
-    MainFrame.TouchLongPress:Connect(startMobileDrag)
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            startMobileDrag(input)
-        end
-    end)
-
-    UserInputService.TouchMoved:Connect(updateMobileDrag)
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch and isDragging then
-            updateMobileDrag(input)
-        end
-    end)
-
-    UserInputService.TouchEnded:Connect(endMobileDrag)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            endMobileDrag()
-        end
-    end)
-
-    -- Функция для эмуляции нажатий на телефонах
-    local function emulatePhoneTaps()
-        while allFeaturesActive do
-            local phones = {}
-            
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("Part") or obj:IsA("MeshPart") then
-                    local nameLower = obj.Name:lower()
-                    if nameLower:find("phone") or nameLower:find("mobile") or nameLower:find("cell") then
-                        table.insert(phones, obj)
+        local function processDescendants(parent)
+            for _, descendant in ipairs(parent:GetDescendants()) do
+                if descendant ~= plot and descendant:IsA("BasePart") then
+                    
+                    local isAllowedObject = IsObjectAllowed(descendant.Name)
+                    
+                    if not isAllowedObject then
+                        local currentParent = descendant.Parent
+                        local hasAllowedParent = false
+                        
+                        while currentParent and currentParent ~= plot do
+                            if IsObjectAllowed(currentParent.Name) then
+                                hasAllowedParent = true
+                                break
+                            end
+                            currentParent = currentParent.Parent
+                        end
+                        
+                        if not hasAllowedParent then
+                            continue
+                        end
+                    end
+                    
+                    local isSpecialObject = false
+                    local isAnimalPodium = false
+                    local isPurchases = false
+                    local isDecorationWithoutStructure = false
+                    
+                    if descendant.Name == "PlotSign" then
+                        isSpecialObject = true
+                    else
+                        for _, objectName in ipairs(ALWAYS_TRANSPARENT_OBJECTS) do
+                            if descendant.Name == objectName then
+                                isSpecialObject = true
+                                break
+                            end
+                        end
+                    end
+                    
+                    local current = descendant
+                    while current and current ~= plot do
+                        if current.Name == "AnimalPodiums" then
+                            isAnimalPodium = true
+                            break
+                        elseif current.Name == "Purchases" then
+                            isPurchases = true
+                            break
+                        end
+                        current = current.Parent
+                    end
+                    
+                    local decorationModel = descendant:FindFirstAncestorOfClass("Model")
+                    if decorationModel then
+                        local currentCheck = decorationModel
+                        local isInDecorations = false
+                        
+                        while currentCheck and currentCheck ~= plot do
+                            if currentCheck.Name == "Decorations" then
+                                isInDecorations = true
+                                break
+                            end
+                            currentCheck = currentCheck.Parent
+                        end
+                        
+                        if isInDecorations then
+                            local hasStructureBaseHome = false
+                            local structureBaseHome = decorationModel:FindFirstChild("structure base home")
+                            if not structureBaseHome then
+                                structureBaseHome = decorationModel:FindFirstChild("structure base home", true)
+                            end
+                            
+                            if structureBaseHome then
+                                hasStructureBaseHome = true
+                            end
+                            
+                            if not hasStructureBaseHome then
+                                isDecorationWithoutStructure = true
+                            end
+                        end
+                    end
+                    
+                    if not XrayOriginalTransparency[descendant] then
+                        XrayOriginalTransparency[descendant] = descendant.Transparency
+                    end
+                    
+                    if descendant.Name == "PlotSign" then
+                        descendant.Transparency = 1
+                    elseif isSpecialObject or isAnimalPodium or isPurchases or isDecorationWithoutStructure then
+                        descendant.Transparency = 1
+                    else
+                        descendant.Transparency = 0.7
                     end
                 end
             end
-            
-            for _, phone in ipairs(phones) do
-                if not allFeaturesActive then break end
-                
-                local touchEvent = Instance.new("TouchTransmitter")
-                touchEvent.Parent = phone
-                
-                task.wait(0.01)
-            end
-            
-            if allFeaturesActive then
-                task.wait(5)
-            end
         end
-    end
-
-    -- Улучшенный спам
-    local function improvedSpam()
-        local BURST_COUNT = 80
-        local DELAY_BETWEEN_BURSTS = 2.86
-        local DELAY_BETWEEN_SHOTS = 0.035
         
-        task.spawn(emulatePhoneTaps)
+        processDescendants(plot)
+    end
+
+    local function RestorePlotTransparency(plot)
+        if not plot then
+            return
+        end
         
-        while allFeaturesActive do
-            for i = 1, BURST_COUNT do
-                if not allFeaturesActive then break end
-                
-                Event:FireServer(0.1780485312144)
-                
-                local targetTime = os.clock() + DELAY_BETWEEN_SHOTS
-                while os.clock() < targetTime and allFeaturesActive do
-                    RunService.Heartbeat:Wait()
-                end
-            end
-            
-            if allFeaturesActive then
-                local waitEnd = os.clock() + DELAY_BETWEEN_BURSTS
-                while os.clock() < waitEnd and allFeaturesActive do
-                    RunService.Heartbeat:Wait()
-                end
+        for object, originalTransparency in pairs(XrayOriginalTransparency) do
+            if object and object.Parent and object:IsDescendantOf(plot) then
+                object.Transparency = originalTransparency
             end
         end
     end
 
-    -- Система движения
-    local function velocityControl()
-        while true do
-            if allFeaturesActive and character and humanoidRootPart then
-                local camera = workspace.CurrentCamera
-                local moveDirection = Vector3.new()
-                
-                local effectiveSpeed = self.CurrentSpeed
-                
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                    moveDirection = moveDirection + camera.CFrame.LookVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                    moveDirection = moveDirection - camera.CFrame.LookVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                    moveDirection = moveDirection - camera.CFrame.RightVector
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                    moveDirection = moveDirection + camera.CFrame.RightVector
-                end
-                
-                if moveDirection.Magnitude > 0 then
-                    moveDirection = moveDirection.Unit
-                    humanoidRootPart.Velocity = Vector3.new(moveDirection.X * effectiveSpeed, humanoidRootPart.Velocity.Y, moveDirection.Z * effectiveSpeed)
-                end
-            end
-            RunService.Heartbeat:Wait()
+    local function SetupPlotTransparency(plot)
+        if not plot then
+            return
         end
+
+        SetPlotTransparency(plot)
     end
 
-    -- Обновление скорости из текстового поля
-    local function updateSpeedFromInput()
-        local inputText = SpeedInput.Text
-        local newSpeed = tonumber(inputText)
+    -- Initialize existing plots
+    local Plots = Workspace:FindFirstChild('Plots')
+    if Plots then
+        for _, plot in pairs(Plots:GetChildren()) do
+            task.spawn(function()
+                SetupPlotTransparency(plot)
+            end)
+        end
+
+        XrayConnections.Plots = Plots.ChildAdded:Connect(function(plot)
+            task.wait(1)
+            SetupPlotTransparency(plot)
+        end)
         
-        if newSpeed then
-            newSpeed = math.clamp(newSpeed, MIN_SPEED, MAX_SPEED)
-            self.CurrentSpeed = newSpeed
-            SpeedInput.Text = tostring(math.floor(newSpeed))
-        else
-            SpeedInput.Text = tostring(self.CurrentSpeed)
-        end
+        XrayConnections.PlotsRemoved = Plots.ChildRemoved:Connect(function(plot)
+            RestorePlotTransparency(plot)
+        end)
     end
-
-    -- Главная функция управления
-    local function toggleAllFeatures()
-        allFeaturesActive = not allFeaturesActive
-        
-        if allFeaturesActive then
-            ToggleButton.Text = "ON"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-            -- Запускаем автоматическое взятие GrappleHook
-            task.spawn(autoEquipGrappleHook)
-            task.spawn(improvedSpam)
-        else
-            ToggleButton.Text = "OFF"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-            if character and humanoidRootPart then
-                humanoidRootPart.Velocity = Vector3.new(0, humanoidRootPart.Velocity.Y, 0)
-            end
-        end
-    end
-
-    -- Обработчики событий
-    SpeedInput.FocusLost:Connect(updateSpeedFromInput)
-
-    ToggleButton.MouseButton1Click:Connect(toggleAllFeatures)
-
-    -- Поддержка Touch для мобильных устройств
-    ToggleButton.TouchTap:Connect(toggleAllFeatures)
-
-    -- Бинд на Q для включения/выключения
-    self.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.Q then
-            toggleAllFeatures()
-        end
-    end)
-
-    -- Запуск системы движения
-    task.spawn(velocityControl)
-
-    -- Авто-восстановление
-    self.Connections.CharacterAdded = player.CharacterAdded:Connect(function(newChar)
-        character = newChar
-        humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
-    end)
-
-    -- Инициализация
-    updateSpeedFromInput()
-
-    self.ScreenGui = ScreenGui
 end
 
-function GrappleSpeedModule:Disable()
-    if self.ScreenGui then
-        self.ScreenGui:Destroy()
-        self.ScreenGui = nil
+local function DisableXray()
+    for object, originalTransparency in pairs(XrayOriginalTransparency) do
+        if object and object.Parent then
+            object.Transparency = originalTransparency
+        end
     end
     
-    for _, connection in pairs(self.Connections) do
+    XrayOriginalTransparency = {}
+    
+    for _, connection in pairs(XrayConnections) do
         if connection then
             connection:Disconnect()
         end
     end
-    self.Connections = {}
-end
-
-function GrappleSpeedModule:SetEnabled(state)
-    self.Enabled = state
-    if state then
-        self:Enable()
-    else
-        self:Disable()
-    end
+    XrayConnections = {}
 end
 
 -- Main Tab
@@ -3963,82 +3429,20 @@ local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
         end
     })
 
-    -- Xray Section
-    Tab:Section({Title = "Xray"})
-    
     Tab:Toggle({
         Title = "Xray",
-        Desc = "Make plots transparent to see through them",
+        Desc = "Make plots transparent",
         Value = false,
         Callback = function(v)
+            XrayEnabled = v
             if v then
-                XrayModule:Enable()
+                EnableXray()
             else
-                XrayModule:Disable()
+                DisableXray()
             end
             Window:Notify({
                 Title = "Xray",
                 Desc = v and "Xray enabled!" or "Xray disabled!",
-                Time = 3
-            })
-        end
-    })
-
-    Tab:Slider({
-        Title = "Xray Transparency",
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Value = 0.7,
-        Callback = function(val)
-            XrayModule:SetTransparency(val)
-        end
-    })
-
-    Tab:Toggle({
-        Title = "Special Objects",
-        Desc = "Toggle special objects transparency",
-        Value = true,
-        Callback = function(v)
-            XrayModule.SpecialObjectsEnabled = v
-            if XrayModule.Enabled then
-                XrayModule:Disable()
-                XrayModule:Enable()
-            end
-            Window:Notify({
-                Title = "Special Objects",
-                Desc = v and "Special objects enabled!" or "Special objects disabled!",
-                Time = 3
-            })
-        end
-    })
-
-    -- Movement Section
-    Tab:Section({Title = "Movement"})
-    
-    Tab:Toggle({
-        Title = "Grapple Speed",
-        Desc = "Enhanced movement with grapple hook (Q to toggle)",
-        Value = false,
-        Callback = function(v)
-            GrappleSpeedModule:SetEnabled(v)
-            Window:Notify({
-                Title = "Grapple Speed",
-                Desc = v and "Grapple Speed enabled! Use Q key" or "Grapple Speed disabled!",
-                Time = 3
-            })
-        end
-    })
-
-    Tab:Toggle({
-        Title = "Float",
-        Desc = "Flight module with height limit (C to toggle flight)",
-        Value = false,
-        Callback = function(v)
-            FloatModule:SetEnabled(v)
-            Window:Notify({
-                Title = "Float",
-                Desc = v and "Float enabled! Use C key to toggle flight" or "Float disabled!",
                 Time = 3
             })
         end
@@ -4087,6 +3491,28 @@ local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
             })
         end
     })
+
+    -- Float Section
+    Tab:Section({Title = "Float"})
+    
+    Tab:Toggle({
+        Title = "Float",
+        Desc = "Flight module with height limit (C to toggle flight)",
+        Value = false,
+        Callback = function(v)
+            FloatEnabled = v
+            if v then
+                EnableFloat()
+            else
+                DisableFloat()
+            end
+            Window:Notify({
+                Title = "Float",
+                Desc = v and "Float enabled! Use C to toggle flight" or "Float disabled!",
+                Time = 3
+            })
+        end
+    })
 end
 
 -- Final Notification
@@ -4095,276 +3521,3 @@ Window:Notify({
     Desc = "All modules have been successfully loaded!",
     Time = 4
 })
-
-видимо из-за Esp фпс понижается, т.к не очищается со временем, а еще не работает XRay:
-local TransparencyModule = {}
-
-local Workspace = game:GetService('Workspace')
-local Players = game:GetService("Players")
-
-local player = Players.LocalPlayer
-
-TransparencyModule.Settings = {
-    Enabled = true,
-    TransparencyValue = 0.7,
-    OriginalTransparency = {}
-}
-
--- Список объектов, которые должны всегда иметь прозрачность 1
-local ALWAYS_TRANSPARENT_OBJECTS = {
-    "AnimalTarget",
-    "DeliveryHitbox", 
-    "MainRoot",
-    "Multiplier",
-    "PlotSign",
-    "Slope",
-    "Spawn",
-    "StealHitbox"
-}
-
--- Список объектов, которые могут менять прозрачность
-local ALLOWED_OBJECTS = {
-    "AnimalPodiums",
-    "Decorations", 
-    "InvisibleWalls",
-    "Laser",
-    "LaserHitbox",
-    "Purchases",
-    "Unlock",
-    "FriendPanel",
-    "Model",
-    "AnimalTarget",
-    "DeliveryHitbox", 
-    "MainRoot",
-    "Multiplier",
-    "PlotSign",
-    "Slope",
-    "Spawn",
-    "StealHitbox"
-}
-
--- Настройки для специальных объектов
-TransparencyModule.SpecialObjectsEnabled = true
-
-local function IsObjectAllowed(objectName)
-    for _, allowedName in ipairs(ALLOWED_OBJECTS) do
-        if objectName == allowedName then
-            return true
-        end
-    end
-    return false
-end
-
-local function SetPlotTransparency(plot)
-    if not plot or not TransparencyModule.Settings.Enabled then
-        return
-    end
-    
-    local function processDescendants(parent)
-        for _, descendant in ipairs(parent:GetDescendants()) do
-            -- Пропускаем сам Plot и работаем только с дочерними объектами
-            if descendant ~= plot and descendant:IsA("BasePart") then
-                
-                -- Проверяем, является ли объект разрешенным
-                local isAllowedObject = IsObjectAllowed(descendant.Name)
-                
-                -- Если объект не разрешен, проверяем родителей на наличие разрешенных объектов
-                if not isAllowedObject then
-                    local currentParent = descendant.Parent
-                    local hasAllowedParent = false
-                    
-                    while currentParent and currentParent ~= plot do
-                        if IsObjectAllowed(currentParent.Name) then
-                            hasAllowedParent = true
-                            break
-                        end
-                        currentParent = currentParent.Parent
-                    end
-                    
-                    -- Если ни объект, ни его родители не разрешены, пропускаем
-                    if not hasAllowedParent then
-                        continue
-                    end
-                end
-                
-                local isSpecialObject = false
-                local isAnimalPodium = false
-                local isPurchases = false
-                local isDecorationWithoutStructure = false
-                
-                -- Проверяем, является ли объект PlotSign (должен иметь прозрачность 1)
-                if descendant.Name == "PlotSign" then
-                    isSpecialObject = true
-                else
-                    -- Проверяем другие специальные объекты
-                    for _, objectName in ipairs(ALWAYS_TRANSPARENT_OBJECTS) do
-                        if descendant.Name == objectName then
-                            isSpecialObject = true
-                            break
-                        end
-                    end
-                end
-                
-                -- Проверяем, находится ли объект в AnimalPodiums или Purchases
-                local current = descendant
-                while current and current ~= plot do
-                    if current.Name == "AnimalPodiums" then
-                        isAnimalPodium = true
-                        break
-                    elseif current.Name == "Purchases" then
-                        isPurchases = true
-                        break
-                    end
-                    current = current.Parent
-                end
-                
-                -- Проверяем, находится ли объект в Decorations и нет ли "structure base home"
-                local decorationModel = descendant:FindFirstAncestorOfClass("Model")
-                if decorationModel then
-                    local currentCheck = decorationModel
-                    local isInDecorations = false
-                    
-                    -- Проверяем, находится ли модель в папке Decorations
-                    while currentCheck and currentCheck ~= plot do
-                        if currentCheck.Name == "Decorations" then
-                            isInDecorations = true
-                            break
-                        end
-                        currentCheck = currentCheck.Parent
-                    end
-                    
-                    -- Если объект в Decorations, проверяем наличие "structure base home"
-                    if isInDecorations then
-                        local hasStructureBaseHome = false
-                        
-                        -- Ищем "structure base home" в модели
-                        local structureBaseHome = decorationModel:FindFirstChild("structure base home")
-                        if not structureBaseHome then
-                            -- Ищем рекурсивно во всех потомках
-                            structureBaseHome = decorationModel:FindFirstChild("structure base home", true)
-                        end
-                        
-                        if structureBaseHome then
-                            hasStructureBaseHome = true
-                        end
-                        
-                        -- Если нет "structure base home", устанавливаем прозрачность 1
-                        if not hasStructureBaseHome then
-                            isDecorationWithoutStructure = true
-                        end
-                    end
-                end
-                
-                -- Сохраняем оригинальную прозрачность
-                if not TransparencyModule.Settings.OriginalTransparency[descendant] then
-                    TransparencyModule.Settings.OriginalTransparency[descendant] = descendant.Transparency
-                end
-                
-                -- Устанавливаем прозрачность в зависимости от типа объекта
-                if descendant.Name == "PlotSign" then
-                    -- PlotSign всегда полностью прозрачна (1)
-                    descendant.Transparency = 1
-                elseif (isSpecialObject and TransparencyModule.SpecialObjectsEnabled) or isAnimalPodium or isPurchases or isDecorationWithoutStructure then
-                    -- Специальные объекты, объекты в AnimalPodiums, Purchases и Decorations без "structure base home" - всегда прозрачность 1
-                    descendant.Transparency = 1
-                else
-                    -- Обычные объекты - применяем настройку прозрачности
-                    descendant.Transparency = TransparencyModule.Settings.TransparencyValue
-                end
-            end
-        end
-    end
-    
-    -- Обрабатываем только дочерние объекты Plot, не сам Plot
-    processDescendants(plot)
-end
-
-local function RestorePlotTransparency(plot)
-    if not plot then
-        return
-    end
-    
-    for object, originalTransparency in pairs(TransparencyModule.Settings.OriginalTransparency) do
-        if object and object.Parent and object:IsDescendantOf(plot) then
-            object.Transparency = originalTransparency
-        end
-    end
-end
-
-local function SetupPlotTransparency(plot)
-    if not plot then
-        return
-    end
-
-    if TransparencyModule.Settings.Enabled then
-        SetPlotTransparency(plot)
-    end
-end
-
-function TransparencyModule.Disable()
-    TransparencyModule.Settings.Enabled = false
-    
-    for object, originalTransparency in pairs(TransparencyModule.Settings.OriginalTransparency) do
-        if object and object.Parent then
-            object.Transparency = originalTransparency
-        end
-    end
-    
-    TransparencyModule.Settings.OriginalTransparency = {}
-end
-
-function TransparencyModule.Enable()
-    TransparencyModule.Settings.Enabled = true
-    Initialize()
-end
-
-function TransparencyModule.SetTransparency(value)
-    local clampedValue = math.clamp(value, 0, 1)
-    TransparencyModule.Settings.TransparencyValue = clampedValue
-    
-    if TransparencyModule.Settings.Enabled then
-        TransparencyModule.Disable()
-        TransparencyModule.Enable()
-    end
-end
-
-function TransparencyModule.ToggleSpecialObjects()
-    TransparencyModule.SpecialObjectsEnabled = not TransparencyModule.SpecialObjectsEnabled
-    
-    if TransparencyModule.Settings.Enabled then
-        TransparencyModule.Disable()
-        TransparencyModule.Enable()
-    end
-    
-    return TransparencyModule.SpecialObjectsEnabled
-end
-
--- Инициализация модуля прозрачности
-local function Initialize()
-    local Plots = Workspace:FindFirstChild('Plots')
-    if Plots then
-        for _, plot in pairs(Plots:GetChildren()) do
-            task.spawn(function()
-                SetupPlotTransparency(plot)
-            end)
-        end
-
-        Plots.ChildAdded:Connect(function(plot)
-            task.wait(1)
-            SetupPlotTransparency(plot)
-        end)
-        
-        Plots.ChildRemoved:Connect(function(plot)
-            RestorePlotTransparency(plot)
-        end)
-    end
-end
-
--- Автоматический запуск
-task.spawn(function()
-    task.wait(2)
-    Initialize()
-    print('Transparency модуль автоматически активирован!')
-end)
-
-return TransparencyModule
